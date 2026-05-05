@@ -20,7 +20,7 @@ jobs:
         name: ShellCheck
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: ludeeus/action-shellcheck@2.0.0
               env:
                   SHELLCHECK_OPTS: -s bash -e SC1071,SC2086
@@ -33,7 +33,7 @@ jobs:
         name: shfmt
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: mfinelli/setup-shfmt@v3
               with:
                   shfmt-version: 3.10.0
@@ -43,7 +43,7 @@ jobs:
         name: yamllint
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: ibiqlik/action-yamllint@v3
               with:
                   config_file: .yamllint.yaml
@@ -52,7 +52,7 @@ jobs:
         name: markdownlint
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: DavidAnson/markdownlint-cli2-action@v23
               with:
                   globs: '**/*.md'
@@ -61,7 +61,7 @@ jobs:
         name: gitleaks
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
             - uses: gitleaks/gitleaks-action@v2
@@ -72,7 +72,7 @@ jobs:
         name: pre-commit (all hooks)
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: actions/setup-python@v6
               with:
                   python-version: '3.13'
@@ -96,7 +96,7 @@ jobs:
                 machine_type: [personal, work]
                 arch: [arm64, amd64]
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - name: Render every .tmpl
@@ -115,7 +115,7 @@ jobs:
         name: brew bundle check (macOS)
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - name: Render Brewfile and check
