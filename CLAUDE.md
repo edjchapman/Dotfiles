@@ -37,7 +37,7 @@ Use these in this order. The golden rule: **always preview before mutating**.
 - **Run `chezmoi apply` without first showing `chezmoi diff` output to the user.**
 - **Commit secrets unencrypted.** All credentials (AWS, GitHub PAT, Jira, etc.) must go through `chezmoi add --encrypt`. Plaintext secrets must never reach git.
 - **Touch `~/.config/chezmoi/key.txt`** (the age private key). If it leaks, every `.age` file in the repo is compromised.
-- **Push to `main`.** All changes go via PR. Self-update workflows open draft PRs only.
+- **Push to `main`.** All changes go via PR. `main` is protected: all 11 CI checks must pass, only squash-merges allowed, branches auto-deleted on merge. See [`docs/runbooks/branch-protection.md`](docs/runbooks/branch-protection.md). Self-update workflows open draft PRs only.
 - **Run `sudo` commands** outside of `run_once_after_05-macos-sudo.sh`. The sudo script is one-time machine bootstrap, not agent territory.
 - **Bypass pre-commit hooks** (`git commit --no-verify`). The hooks exist to stop secret leaks.
 
