@@ -65,7 +65,7 @@ jobs:
 
             - name: Create draft PR
               if: steps.outdated.outputs.no_updates == 'false'
-              uses: peter-evans/create-pull-request@v6
+              uses: peter-evans/create-pull-request@v8
               with:
                   branch: chore/weekly-brew-update
                   delete-branch: true
