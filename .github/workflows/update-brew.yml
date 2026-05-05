@@ -15,7 +15,7 @@ jobs:
         name: brew outdated → draft PR
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin

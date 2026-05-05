@@ -15,7 +15,7 @@ jobs:
         name: gitleaks (full history)
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   fetch-depth: 0
             - uses: gitleaks/gitleaks-action@v2
@@ -27,7 +27,7 @@ jobs:
         name: chezmoi doctor smoke test
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - run: chezmoi doctor || true   # informational only — many checks are macOS-specific
