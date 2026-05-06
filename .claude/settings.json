@@ -9,6 +9,8 @@
       "Bash(chezmoi execute-template:*)",
       "Bash(chezmoi cd)",
       "Bash(chezmoi state:*)",
+      "Bash(chezmoi status:*)",
+      "Bash(chezmoi-drift-check:*)",
       "Bash(shellcheck:*)",
       "Bash(shfmt:*)",
       "Bash(yamllint:*)",

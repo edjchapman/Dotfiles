@@ -186,3 +186,37 @@ mkdir -p "$HOME/.cache"
 if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/null)" ]]; then
   (brewup && date +%F >| "$BREWUP_STAMP") &>/dev/null &!
 fi
+
+# chezmoi drift banner — surfaces $HOME and Brewfile drift on shell start.
+# Cached state is read synchronously (cheap); a fresh check kicks off in the background.
+# Silence with: export CHEZMOI_DRIFT_QUIET=1
+if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
+  _drift_state="$HOME/.cache/chezmoi-drift/state"
+  if [[ -f "$_drift_state" ]]; then
+    # shellcheck disable=SC1090
+    source "$_drift_state" 2>/dev/null
+    if (( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} > 0 )); then
+      print -P "%F{yellow}${summary:-chezmoi: drift detected}%f"
+    fi
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA CHECKED_AT summary
+  fi
+  unset _drift_state
+  (chezmoi-drift-check --brief --quiet) &>/dev/null &!
+fi
+
+# brew wrapper — reminds you to update Brewfile.tmpl after manual install/uninstall/tap,
+# and refreshes the drift cache asynchronously so the next shell sees the change.
+brew() {
+  command brew "$@"
+  local rc=$? subcmd="${1:-}"
+  case "$subcmd" in
+    install|uninstall|reinstall|tap|untap)
+      if command -v chezmoi &>/dev/null; then
+        print -P "%F{yellow}(chezmoi) update Brewfile.tmpl: $(chezmoi source-path)/Brewfile.tmpl%f" >&2
+      fi
+      command -v chezmoi-drift-check &>/dev/null && \
+        (chezmoi-drift-check --full --quiet) &>/dev/null &!
+      ;;
+  esac
+  return $rc
+}

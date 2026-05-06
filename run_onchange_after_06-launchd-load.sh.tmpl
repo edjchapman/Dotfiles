@@ -1,0 +1,22 @@
+#!/bin/bash
+# Reload chezmoi-drift launchd agent whenever its plist content changes.
+# Hash include forces re-run on plist edits:
+# {{ include "private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl" | sha256sum }}
+
+set -euo pipefail
+
+PLIST="$HOME/Library/LaunchAgents/com.user.chezmoi-drift.plist"
+
+if [[ ! -f "$PLIST" ]]; then
+    echo "chezmoi-drift plist missing at $PLIST; skipping launchctl load"
+    exit 0
+fi
+
+# Ensure log dir exists for StandardOutPath/StandardErrorPath.
+mkdir -p "$HOME/Library/Logs"
+
+# Best-effort unload (ignore "not loaded" errors), then load.
+launchctl unload "$PLIST" 2>/dev/null || true
+launchctl load "$PLIST"
+
+echo "Loaded launchd agent: com.user.chezmoi-drift"
