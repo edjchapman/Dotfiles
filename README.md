@@ -28,6 +28,7 @@ One command bootstraps a clean Mac into a fully configured development environme
 | **Architecture-aware templates** | Git credential helpers and GPG paths resolve correctly on both Apple Silicon and Intel. |
 | **Self-checking** | `make ci` (lint, fmt, template matrix, secret scan, brew bundle check) runs locally; same in CI on every push. |
 | **Self-updating** | Weekly GitHub Actions open draft PRs for outdated brew formulae and stale external pins. Nothing auto-merges. |
+| **Drift detection on the live machine** | A shell banner, daily launchd notification, and `brew` wrapper surface drift caused by manual changes (e.g. `brew install x`). See [drift recovery runbook](docs/runbooks/recover-from-drift.md#how-drift-surfaces). |
 
 ## What's automated
 
@@ -44,6 +45,7 @@ One command bootstraps a clean Mac into a fully configured development environme
 | **Dock layout** | App pinning via `dockutil`, conditional by machine type | `run_onchange_04-dock-layout.sh.tmpl` |
 | **Firewall / Touch ID sudo / Energy / Auto-updates** | One-shot sudo setup | `run_once_after_05-macos-sudo.sh` |
 | **Lint/test/CI** | shellcheck, shfmt, yamllint, markdownlint, gitleaks, template matrix | `Makefile`, `.github/workflows/ci.yml`, `.pre-commit-config.yaml` |
+| **Drift detection** | Per-shell banner, daily launchd notification (09:30), `brew` install/uninstall reminder | `dot_local/bin/executable_chezmoi-drift-check`, `private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl`, `dot_zshrc` |
 
 ## Repository layout
 
@@ -68,6 +70,7 @@ One command bootstraps a clean Mac into a fully configured development environme
 chezmoi doctor               # all checks should pass
 chezmoi verify               # silent = zero drift
 make ci                      # full local CI (lint, fmt, templates, audit, doctor)
+make drift                   # full drift report ($HOME files + Brewfile, machine-only)
 ```
 
 ## Updating

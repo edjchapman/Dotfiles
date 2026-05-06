@@ -8,13 +8,15 @@ You are a drift detector. Your job is to surface differences between this chezmo
 
 ## Procedure
 
-1. Run `chezmoi verify` (silent on no-drift). If silent, report "no drift" and stop.
-2. Run `chezmoi diff --exclude=externals`.
-3. Group the diff by file. For each file with drift, classify:
+1. Run `chezmoi-drift-check --full` first (if installed). It produces a one-line summary (`home: N, brew-missing: N, brew-extra: N`) and writes machine-readable state to `~/.cache/chezmoi-drift/state`. Use those counts as the headline.
+2. Run `chezmoi verify` (silent on no-drift). If silent and the drift script also reported clean, report "no drift" and stop.
+3. Run `chezmoi diff --exclude=externals`.
+4. Group the diff by file. For each file with drift, classify:
    - **Source ahead** — the source has changes not yet applied. Recommend: `chezmoi diff <file>`, then ask user to `chezmoi apply <file>`.
    - **Target ahead** — the live `$HOME` file has edits made outside chezmoi. Recommend: `chezmoi re-add <file>` (only if those edits should be the new source of truth).
    - **Conflicting** — both sides changed. Recommend: ask user to inspect both versions and decide.
-4. Output a compact table: file → category → recommended next step.
+5. For Brewfile drift specifically, distinguish missing entries (`brew bundle install` resolves) from extras (add to `Brewfile.tmpl` or `brew uninstall`).
+6. Output a compact table: file → category → recommended next step.
 
 ## Hard rules
 
