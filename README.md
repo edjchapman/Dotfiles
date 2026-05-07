@@ -45,7 +45,7 @@ One command bootstraps a clean Mac into a fully configured development environme
 | **Dock layout** | App pinning via `dockutil`, conditional by machine type | `run_onchange_04-dock-layout.sh.tmpl` |
 | **Firewall / Touch ID sudo / Energy / Auto-updates** | One-shot sudo setup | `run_once_after_05-macos-sudo.sh` |
 | **Lint/test/CI** | shellcheck, shfmt, yamllint, markdownlint, gitleaks, template matrix | `Makefile`, `.github/workflows/ci.yml`, `.pre-commit-config.yaml` |
-| **Drift detection** | Per-shell banner, daily launchd notification (09:30), `brew` install/uninstall reminder | `dot_local/bin/executable_chezmoi-drift-check`, `private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl`, `dot_zshrc` |
+| **Drift detection** | Per-shell banner, daily launchd notification (09:30), reminder after `brew install/uninstall/reinstall/tap/untap` | `dot_local/bin/executable_chezmoi-drift-check`, `private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl`, `dot_zshrc` |
 
 ## Repository layout
 

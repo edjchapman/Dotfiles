@@ -6,7 +6,7 @@
 
 Three machine-resident signals run automatically; you don't need to remember to check:
 
-- **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `drift: home: 1, brew-extra: 1 …`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. Silence with `export CHEZMOI_DRIFT_QUIET=1`.
+- **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `drift: home: 1, brew-extra: 1 …`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
 - **Daily macOS notification.** The launchd agent `com.user.chezmoi-drift` (loaded from `~/Library/LaunchAgents/com.user.chezmoi-drift.plist`) runs at 09:30 and posts a Notification Center alert if drift is found. Logs at `~/Library/Logs/chezmoi-drift.log`.
 - **`brew` wrapper.** After `brew install/uninstall/reinstall/tap/untap`, the shell prints a reminder pointing at `Brewfile.tmpl` and refreshes the drift cache asynchronously.
 
@@ -17,8 +17,9 @@ The summary line breaks down as:
 | Field | Meaning | Typical fix |
 |---|---|---|
 | `home: N` | N files chezmoi manages differ from source. | `chezmoi diff` → either `chezmoi apply` (source wins) or `chezmoi re-add` (target wins). |
-| `brew-missing: N` | N entries in `Brewfile.tmpl` not installed on this machine. | `chezmoi apply` (re-runs `run_onchange_02-brew-bundle.sh.tmpl`), or `brew bundle install --file=<rendered>`. |
+| `brew-missing: N` | N entries in `Brewfile.tmpl` not installed on this machine (typically because something was uninstalled outside the Brewfile flow). | `brew bundle install --file=<(chezmoi execute-template < $(chezmoi source-path)/Brewfile.tmpl)` — `chezmoi apply` only re-runs the brew script when `Brewfile.tmpl` content changed, so it won't help here unless you also edit the Brewfile. |
 | `brew-extra: N` | N packages installed locally but not in `Brewfile.tmpl`. | Either add them to `Brewfile.tmpl` (right group) or `brew uninstall`. |
+| `ERROR: …` | A check could not be run. Counts in the same line may be incomplete. | Re-run `chezmoi-drift-check --full` directly to see the underlying error message; common causes are a broken `Brewfile.tmpl` template or a missing age key for `chezmoi status`. |
 
 ## Diagnose
 

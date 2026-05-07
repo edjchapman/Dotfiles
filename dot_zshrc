@@ -188,8 +188,11 @@ if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/nul
 fi
 
 # chezmoi drift banner — surfaces $HOME and Brewfile drift on shell start.
-# Cached state is read synchronously (cheap); a fresh check kicks off in the background.
-# Silence with: export CHEZMOI_DRIFT_QUIET=1
+# Cached state is read synchronously (cheap). A TTL-bounded refresh is kicked
+# off in the background — it only re-runs the full check when the cache is
+# older than $CHEZMOI_DRIFT_TTL (default 4h), otherwise it's a no-op.
+# CHEZMOI_DRIFT_QUIET=1 silences the banner only; the cache still refreshes
+# and the daily launchd notification still fires.
 if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
   _drift_state="$HOME/.cache/chezmoi-drift/state"
   if [[ -f "$_drift_state" ]]; then

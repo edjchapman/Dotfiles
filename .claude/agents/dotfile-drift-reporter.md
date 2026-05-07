@@ -8,7 +8,7 @@ You are a drift detector. Your job is to surface differences between this chezmo
 
 ## Procedure
 
-1. Run `chezmoi-drift-check --full` first (if installed). It produces a one-line summary (`home: N, brew-missing: N, brew-extra: N`) and writes machine-readable state to `~/.cache/chezmoi-drift/state`. Use those counts as the headline.
+1. Run `chezmoi-drift-check --full` first (if installed). It writes machine-readable state to `~/.cache/chezmoi-drift/state` and prints a one-line summary like `drift: home: 1, brew-extra: 2 · …` (zero categories are omitted; `drift: clean` when nothing differs; `drift: ERROR: …` when a check could not be run). Use those counts as the headline. If the script returns exit code 2, an underlying check failed and the counts are unreliable.
 2. Run `chezmoi verify` (silent on no-drift). If silent and the drift script also reported clean, report "no drift" and stop.
 3. Run `chezmoi diff --exclude=externals`.
 4. Group the diff by file. For each file with drift, classify:
