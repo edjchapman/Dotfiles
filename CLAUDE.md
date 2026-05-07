@@ -30,6 +30,7 @@ Use these in this order. The golden rule: **always preview before mutating**.
 | `chezmoi re-add <path>` | Pulling `$HOME` changes back to source | Use when a file was edited in place outside chezmoi. |
 | `chezmoi add --encrypt <path>` | Adding a new secret | **Never use `chezmoi add` (without `--encrypt`) for secrets.** |
 | `make ci` | Before any commit/push | Runs lint, fmt-check, template matrix, audit, doctor. |
+| `make drift` (or `chezmoi-drift-check --full`) | Investigating a drift banner / notification | Read-only. Reports `home`, `brew-missing`, `brew-extra` counts and writes `~/.cache/chezmoi-drift/state`. |
 
 ## Dangerous operations — agents must NOT do these without explicit user approval
 
@@ -148,5 +149,6 @@ When you start working on files matching specific patterns, also load the releva
 - **On every push** (`.github/workflows/ci.yml`): the same checks plus a 4-cell template matrix and a macOS `brew bundle check`.
 - **Weekly** (`.github/workflows/update-*.yml`): outdated brew packages and stale external pins (`oh-my-zsh`, `claude-code-config`) get a draft PR.
 - **Monthly** (`.github/workflows/audit.yml`): full-history secret scan.
+- **Per-shell + daily on the live machine** (`~/.local/bin/chezmoi-drift-check`): a shell banner surfaces drift on each new zsh, the launchd agent `com.user.chezmoi-drift` posts a daily macOS notification at 09:30, and a `brew` wrapper reminds you to update `Brewfile.tmpl` after manual `install`/`uninstall`/`reinstall`/`tap`/`untap`. `make drift` runs the full check on demand. See [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md) for what each signal means.
 
 Every automated update lands as a **draft PR**. Nothing auto-merges. Nothing auto-applies to a live machine.

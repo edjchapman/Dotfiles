@@ -1,4 +1,4 @@
-.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test ci diff apply doctor pre-commit-install
+.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test ci diff apply doctor drift pre-commit-install
 
 # Machine_type x arch matrix used by verify-templates.
 MACHINE_TYPES := personal work
@@ -100,3 +100,7 @@ apply: ## Deploy changes to home directory (requires user confirmation in intera
 
 doctor: ## Run chezmoi health checks
 	@chezmoi doctor
+
+drift: ## Run a full drift check (chezmoi-drift-check --full); machine-only, not in CI
+	@command -v chezmoi-drift-check >/dev/null 2>&1 || { echo "chezmoi-drift-check not on PATH; run 'chezmoi apply' first"; exit 1; }
+	@chezmoi-drift-check --full

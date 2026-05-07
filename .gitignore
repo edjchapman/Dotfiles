@@ -2,6 +2,7 @@
 .vscode/
 .DS_Store
 bin/
+!dot_local/bin/
 
 # Per-machine MCP server config (may contain tokens)
 .mcp.json
