@@ -56,7 +56,7 @@ jobs:
 
                   ## Outdated formulae
 
-                  ```
+                  ```text
                   ${{ steps.outdated.outputs.outdated }}
                   ```
 
