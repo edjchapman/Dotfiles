@@ -67,11 +67,15 @@ fi
 
 cache_fresh() {
     [[ -f "$STATE_FILE" ]] || return 1
-    local now mtime age
+    local now mtime
     now=$(date +%s)
-    mtime=$(stat -f %m "$STATE_FILE" 2>/dev/null || stat -c %Y "$STATE_FILE" 2>/dev/null || echo 0)
-    age=$((now - mtime))
-    [[ $age -lt $TTL ]]
+    mtime=$(stat -f %m "$STATE_FILE" 2>/dev/null || stat -c %Y "$STATE_FILE" 2>/dev/null)
+    # Force mtime to a non-negative integer. Without this, any stat oddity
+    # (empty output, locale-decorated text, partial read during atomic rotate)
+    # leaks into the arithmetic context below where bash's name-resolution can
+    # then trigger a confusing `unbound variable` error under `set -u`.
+    [[ $mtime =~ ^[0-9]+$ ]] || mtime=0
+    ((now - mtime < TTL))
 }
 
 # Brief mode: fast path, return cached state if fresh.
