@@ -164,7 +164,7 @@ if [[ $HAD_ERROR -eq 1 ]]; then
 elif [[ -z $parts ]]; then
     summary="drift: clean"
 else
-    summary="drift: $parts · see docs/runbooks/recover-from-drift.md"
+    summary="drift: $parts · run chezmoi-fix to resolve"
 fi
 
 # Atomic state-file write: tmp+mv so a concurrent reader never sees a partial file.

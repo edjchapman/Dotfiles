@@ -1,4 +1,4 @@
-.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test ci diff apply doctor drift pre-commit-install
+.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test ci diff apply doctor drift fix pre-commit-install
 
 # Machine_type x arch matrix used by verify-templates.
 MACHINE_TYPES := personal work
@@ -104,3 +104,7 @@ doctor: ## Run chezmoi health checks
 drift: ## Run a full drift check (chezmoi-drift-check --full); machine-only, not in CI
 	@command -v chezmoi-drift-check >/dev/null 2>&1 || { echo "chezmoi-drift-check not on PATH; run 'chezmoi apply' first"; exit 1; }
 	@chezmoi-drift-check --full
+
+fix: ## Run the interactive remediation menu (chezmoi-fix); machine-only, not in CI
+	@command -v chezmoi-fix >/dev/null 2>&1 || { echo "chezmoi-fix not on PATH; run 'chezmoi apply' first"; exit 1; }
+	@chezmoi-fix
