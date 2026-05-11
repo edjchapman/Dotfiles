@@ -31,3 +31,38 @@ jobs:
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - run: chezmoi doctor || true   # informational only — many checks are macOS-specific
+
+    brew-deprecation-scan:
+        name: Brew deprecation/disabled scan
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v6
+            - name: Install chezmoi
+              run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
+            - name: Render Brewfile and check each formula
+              run: |
+                  brew update >/dev/null
+                  flagged=()
+                  for mt in personal work; do
+                      chezmoi execute-template --init --source="$(pwd)" \
+                          --override-data "{\"machine_type\":\"$mt\",\"gpg_signing_key\":\"\"}" \
+                          < Brewfile.tmpl > "/tmp/Brewfile.$mt"
+                      while read -r f; do
+                          [ -z "$f" ] && continue
+                          info=$(brew info --json=v2 "$f" 2>/dev/null || echo '{}')
+                          dep=$(printf '%s' "$info" | jq -r '.formulae[0].deprecated // false')
+                          disabled=$(printf '%s' "$info" | jq -r '.formulae[0].disabled // false')
+                          if [ "$dep" = "true" ] || [ "$disabled" = "true" ]; then
+                              flagged+=("$f ($mt): deprecated=$dep disabled=$disabled")
+                          fi
+                      done < <(brew bundle list --file="/tmp/Brewfile.$mt" --formula 2>/dev/null)
+                  done
+                  if [ ${#flagged[@]} -eq 0 ]; then
+                      echo "All formulae are healthy."
+                  else
+                      echo "::group::Flagged formulae"
+                      for entry in "${flagged[@]}"; do
+                          echo "::warning::$entry"
+                      done
+                      echo "::endgroup::"
+                  fi
