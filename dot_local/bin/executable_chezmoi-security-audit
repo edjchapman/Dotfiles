@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+# chezmoi-security-audit — read-only check of the machine's security baseline.
+#
+# Verifies the protections that run_once_after_05-macos-sudo.sh tries to
+# establish, plus a few ongoing hygiene checks (key permissions, GPG expiry,
+# pending macOS updates). Counts feed into chezmoi-drift-check as
+# SECURITY_DRIFT.
+#
+# Modes:
+#   (default)  Human report.
+#   --drift    Print each failing check explicitly.
+#   --quiet    TSV: "<ok>\t<failed>\t<skipped>".
+#
+# Exit: 0 clean, 1 drift, 2 audit error.
+
+set -uo pipefail
+
+DRIFT=0
+QUIET=0
+
+usage() {
+    cat <<'EOF'
+chezmoi-security-audit [--drift] [--quiet] [-h]
+
+Checks: FileVault, SIP, firewall+stealth, SSH key passphrase, AWS creds perms,
+age key perms, GPG signing key expiry (if configured), softwareupdate pending.
+
+Exit codes: 0 clean, 1 drift, 2 audit error.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --drift) DRIFT=1 ;;
+        --quiet) QUIET=1 ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "chezmoi-security-audit: unknown arg: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+OK=0
+FAIL=0
+SKIP=0
+FAILED=()
+
+check() {
+    local name=$1 status=$2 detail=${3:-}
+    case "$status" in
+        ok) OK=$((OK + 1)) ;;
+        fail)
+            FAIL=$((FAIL + 1))
+            FAILED+=("$name — $detail")
+            ;;
+        skip) SKIP=$((SKIP + 1)) ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# FileVault
+# ------------------------------------------------------------------------------
+if command -v fdesetup >/dev/null 2>&1; then
+    fv_status=$(fdesetup status 2>/dev/null | head -1)
+    case "$fv_status" in
+        *"FileVault is On"*) check "FileVault" ok ;;
+        *"FileVault is Off"*) check "FileVault" fail "disk encryption disabled — enable via System Settings ➜ Privacy & Security ➜ FileVault" ;;
+        *) check "FileVault" skip ;;
+    esac
+else
+    check "FileVault" skip
+fi
+
+# ------------------------------------------------------------------------------
+# System Integrity Protection
+# ------------------------------------------------------------------------------
+if command -v csrutil >/dev/null 2>&1; then
+    sip_status=$(csrutil status 2>/dev/null)
+    if printf '%s' "$sip_status" | grep -qi 'enabled'; then
+        check "System Integrity Protection" ok
+    else
+        check "System Integrity Protection" fail "SIP disabled — boot into recovery and run \`csrutil enable\`"
+    fi
+else
+    check "System Integrity Protection" skip
+fi
+
+# ------------------------------------------------------------------------------
+# Application firewall (run_once_after_05-macos-sudo.sh sets this on bootstrap).
+# The com.apple.alf plist may be absent on newer macOS; query the daemon directly.
+# ------------------------------------------------------------------------------
+FW_BIN=/usr/libexec/ApplicationFirewall/socketfilterfw
+if [[ -x $FW_BIN ]]; then
+    fw_global=$("$FW_BIN" --getglobalstate 2>/dev/null)
+    if printf '%s' "$fw_global" | grep -qiE 'enabled|State = 1|State = 2'; then
+        check "Firewall enabled" ok
+    else
+        check "Firewall enabled" fail "${fw_global:-unknown} — \`sudo $FW_BIN --setglobalstate on\`"
+    fi
+    fw_stealth=$("$FW_BIN" --getstealthmode 2>/dev/null)
+    if printf '%s' "$fw_stealth" | grep -qi 'on'; then
+        check "Firewall stealth mode" ok
+    else
+        check "Firewall stealth mode" fail "${fw_stealth:-unknown} — \`sudo $FW_BIN --setstealthmode on\`"
+    fi
+else
+    check "Firewall enabled" skip
+    check "Firewall stealth mode" skip
+fi
+
+# ------------------------------------------------------------------------------
+# SSH private keys — verify each one is passphrase-protected.
+# ssh-keygen -y -P "" succeeds when the key has NO passphrase (bad).
+# Non-zero exit means the key required a passphrase (good).
+# ------------------------------------------------------------------------------
+ssh_dir="$HOME/.ssh"
+ssh_keys_seen=0
+ssh_keys_unprotected=0
+if [[ -d $ssh_dir ]]; then
+    shopt -s nullglob
+    for kf in "$ssh_dir"/id_* "$ssh_dir"/*_id_* "$ssh_dir"/*.pem; do
+        [[ -f $kf && ! $kf == *.pub ]] || continue
+        # Skip files that don't look like private keys.
+        if head -1 "$kf" 2>/dev/null | grep -qE 'BEGIN.*PRIVATE KEY'; then
+            ssh_keys_seen=$((ssh_keys_seen + 1))
+            if ssh-keygen -y -P "" -f "$kf" >/dev/null 2>&1; then
+                ssh_keys_unprotected=$((ssh_keys_unprotected + 1))
+            fi
+        fi
+    done
+    shopt -u nullglob
+fi
+if ((ssh_keys_seen == 0)); then
+    check "SSH key passphrase" skip
+elif ((ssh_keys_unprotected == 0)); then
+    check "SSH key passphrase" ok
+else
+    check "SSH key passphrase" fail "${ssh_keys_unprotected} of ${ssh_keys_seen} keys lack a passphrase — re-encrypt with \`ssh-keygen -p -f <key>\`"
+fi
+
+# ------------------------------------------------------------------------------
+# Sensitive file permissions
+# ------------------------------------------------------------------------------
+check_perm() {
+    local name=$1 path=$2 expected=$3
+    if [[ ! -e $path ]]; then
+        check "$name" skip
+        return
+    fi
+    # Force BSD stat: this repo deploys GNU coreutils first on PATH, so a bare
+    # `stat -f '%Lp'` gets routed to GNU stat (which then prints filesystem info).
+    local actual
+    actual=$(/usr/bin/stat -f '%Lp' "$path" 2>/dev/null)
+    if [[ $actual == "$expected" ]]; then
+        check "$name" ok
+    else
+        check "$name" fail "$path is ${actual:-?}, expected $expected — \`chmod $expected $path\`"
+    fi
+}
+
+check_perm "Age key perms" "$HOME/.config/chezmoi/key.txt" 600
+check_perm "AWS credentials perms" "$HOME/.aws/credentials" 600
+check_perm "AWS config perms" "$HOME/.aws/config" 600
+check_perm "SSH config perms" "$HOME/.ssh/config" 600
+
+# ------------------------------------------------------------------------------
+# GPG signing key expiry, if configured.
+# ------------------------------------------------------------------------------
+gpg_key=$(chezmoi data 2>/dev/null | awk -F'"' '/"gpg_signing_key"/ {print $4}')
+if [[ -n $gpg_key ]] && command -v gpg >/dev/null 2>&1; then
+    # Parse machine-readable output. Each pub/sub line carries an expiry timestamp in field 7.
+    expiry=$(gpg --list-keys --with-colons "$gpg_key" 2>/dev/null | awk -F: '$1=="pub"{print $7; exit}')
+    if [[ -z $expiry || $expiry == 0 ]]; then
+        check "GPG signing key expiry" ok # no expiry set
+    else
+        now=$(date +%s)
+        days_left=$(((expiry - now) / 86400))
+        if ((days_left < 0)); then
+            check "GPG signing key expiry" fail "key $gpg_key expired $((-days_left)) day(s) ago"
+        elif ((days_left < 30)); then
+            check "GPG signing key expiry" fail "key $gpg_key expires in $days_left day(s) — rotate or extend soon"
+        else
+            check "GPG signing key expiry" ok
+        fi
+    fi
+else
+    check "GPG signing key expiry" skip
+fi
+
+# ------------------------------------------------------------------------------
+# Pending macOS software updates. Cached 24h because softwareupdate -l is a
+# network call (Apple's update server) and slow.
+# ------------------------------------------------------------------------------
+SU_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-security"
+SU_CACHE="$SU_CACHE_DIR/softwareupdate.txt"
+SU_TTL=86400
+mkdir -p "$SU_CACHE_DIR" 2>/dev/null || true
+need_refresh=1
+if [[ -f $SU_CACHE ]]; then
+    mtime=$(stat -f %m "$SU_CACHE" 2>/dev/null)
+    [[ $mtime =~ ^[0-9]+$ ]] || mtime=0
+    (($(date +%s) - mtime < SU_TTL)) && need_refresh=0
+fi
+if ((need_refresh)) && command -v softwareupdate >/dev/null 2>&1; then
+    if softwareupdate -l >"$SU_CACHE.tmp.$$" 2>&1; then
+        mv -f "$SU_CACHE.tmp.$$" "$SU_CACHE"
+    else
+        rm -f "$SU_CACHE.tmp.$$"
+    fi
+fi
+if [[ -f $SU_CACHE ]]; then
+    if grep -qiE 'no new software available|no software available|no updates' "$SU_CACHE" 2>/dev/null; then
+        check "macOS software updates" ok
+    elif grep -qE 'Label|Title' "$SU_CACHE" 2>/dev/null; then
+        pending=$(grep -cE '^\* Label:|^   Title:' "$SU_CACHE" 2>/dev/null || echo 0)
+        check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
+    else
+        check "macOS software updates" skip
+    fi
+else
+    check "macOS software updates" skip
+fi
+
+# ------------------------------------------------------------------------------
+# Output
+# ------------------------------------------------------------------------------
+if ((QUIET)); then
+    printf '%d\t%d\t%d\n' "$OK" "$FAIL" "$SKIP"
+else
+    echo "Security baseline:"
+    printf '  ok:       %d\n' "$OK"
+    printf '  failed:   %d\n' "$FAIL"
+    printf '  skipped:  %d\n' "$SKIP"
+    if ((${#FAILED[@]} > 0 && DRIFT)); then
+        echo
+        echo "Failures:"
+        for f in "${FAILED[@]}"; do
+            printf '  - %s\n' "$f"
+        done
+    elif ((FAIL > 0)); then
+        echo
+        echo "Re-run with --drift to see specifics."
+    fi
+fi
+
+((FAIL > 0)) && exit 1
+exit 0

@@ -198,10 +198,10 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
   if [[ -f "$_drift_state" ]]; then
     # shellcheck disable=SC1090
     source "$_drift_state" 2>/dev/null
-    if (( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} > 0 )); then
+    if (( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} > 0 )); then
       print -P "%F{yellow}${summary:-chezmoi: drift detected}%f"
     fi
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT CHECKED_AT summary
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT CHECKED_AT summary
   fi
   unset _drift_state
   (chezmoi-drift-check --brief --quiet) &>/dev/null &!
