@@ -35,6 +35,7 @@ HOME_DRIFT=0
 BREW_MISSING=0
 BREW_EXTRA=0
 DEFAULTS_DRIFT=0
+SECURITY_DRIFT=0
 HAD_ERROR=0
 summary=
 if [[ -f $DRIFT_STATE ]]; then
@@ -45,7 +46,7 @@ fi
 inbox_count=0
 [[ -s $INBOX_JOURNAL ]] && inbox_count=$(wc -l <"$INBOX_JOURNAL" | tr -d ' ')
 
-total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + inbox_count))
+total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} + inbox_count))
 
 echo
 echo "==> chezmoi-fix"
@@ -88,7 +89,11 @@ if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
     fi
 fi
 if command -v chezmoi-security-audit >/dev/null 2>&1; then
-    OPTS+=("security|Security baseline check                        →  chezmoi-security-audit")
+    if ((${SECURITY_DRIFT:-0} > 0)); then
+        OPTS+=("security|Inspect ${SECURITY_DRIFT} security baseline failure(s)   →  chezmoi-security-audit --drift")
+    else
+        OPTS+=("security|Security baseline check (no known drift)       →  chezmoi-security-audit")
+    fi
 fi
 
 # Always available.
@@ -145,7 +150,7 @@ case "$id" in
         ;;
     defaults) exec chezmoi-defaults-audit --drift ;;
     defaults-apply) exec chezmoi-defaults-audit --apply ;;
-    security) exec chezmoi-security-audit ;;
+    security) exec chezmoi-security-audit --drift ;;
     doctor) exec chezmoi doctor ;;
     dismiss)
         echo
