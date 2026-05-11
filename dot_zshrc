@@ -205,18 +205,45 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
   fi
   unset _drift_state
   (chezmoi-drift-check --brief --quiet) &>/dev/null &!
+
+  # brew-inbox banner — surfaces pending events recorded by the brew()/mas()
+  # wrappers. The journal is ephemeral (~/.cache); count flips red at >= 10 so
+  # users notice before it becomes a chore.
+  _inbox="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson"
+  if [[ -s $_inbox ]]; then
+    _n=$(wc -l <"$_inbox" | tr -d ' ')
+    _color=yellow
+    (( _n >= 10 )) && _color=red
+    print -P "%F{$_color}chezmoi: $_n brew event(s) pending — run chezmoi-brew-sync%f"
+    unset _n _color
+  fi
+  unset _inbox
 fi
 
-# brew wrapper — reminds you to update Brewfile.tmpl after manual install/uninstall/tap,
-# and refreshes the drift cache asynchronously so the next shell sees the change.
+# brew/mas wrappers — record each mutating invocation to the inbox journal and
+# kick off an async drift refresh. The recorder is silent on failure so it can
+# never break a working brew/mas command.
 brew() {
   command brew "$@"
   local rc=$? subcmd="${1:-}"
   case "$subcmd" in
     install|uninstall|reinstall|tap|untap)
-      if command -v chezmoi &>/dev/null; then
-        print -P "%F{yellow}(chezmoi) update Brewfile.tmpl: $(chezmoi source-path)/Brewfile.tmpl%f" >&2
-      fi
+      command -v chezmoi-brew-record &>/dev/null && \
+        chezmoi-brew-record --rc "$rc" -- "$@" &>/dev/null &!
+      command -v chezmoi-drift-check &>/dev/null && \
+        (chezmoi-drift-check --full --quiet) &>/dev/null &!
+      ;;
+  esac
+  return $rc
+}
+
+mas() {
+  command mas "$@"
+  local rc=$? subcmd="${1:-}"
+  case "$subcmd" in
+    install|uninstall|purchase)
+      command -v chezmoi-brew-record &>/dev/null && \
+        chezmoi-brew-record --rc "$rc" --tool mas -- "$@" &>/dev/null &!
       command -v chezmoi-drift-check &>/dev/null && \
         (chezmoi-drift-check --full --quiet) &>/dev/null &!
       ;;

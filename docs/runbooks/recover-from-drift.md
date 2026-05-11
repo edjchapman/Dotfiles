@@ -8,7 +8,7 @@ Three machine-resident signals run automatically; you don't need to remember to 
 
 - **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `drift: home: 1, brew-extra: 1 …`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
 - **Daily macOS notification.** The launchd agent `com.user.chezmoi-drift` (loaded from `~/Library/LaunchAgents/com.user.chezmoi-drift.plist`) runs at 09:30 and posts a Notification Center alert if drift is found. Logs at `~/Library/Logs/chezmoi-drift.log`.
-- **`brew` wrapper.** After `brew install/uninstall/reinstall/tap/untap`, the shell prints a reminder pointing at `Brewfile.tmpl` and refreshes the drift cache asynchronously.
+- **`brew` / `mas` wrapper.** After `brew install/uninstall/reinstall/tap/untap` (or `mas install/uninstall/purchase`), the wrapper appends an event to `~/.cache/chezmoi-brew-inbox/journal.ndjson` and refreshes the drift cache asynchronously. The shell banner on the next session shows the pending count; `chezmoi-brew-sync` is the interactive merge tool that updates `Brewfile.tmpl` after your review. See [`brew-sync.md`](brew-sync.md).
 
 The single source of truth is the script `~/.local/bin/chezmoi-drift-check` — `make drift` is a shortcut for `chezmoi-drift-check --full`.
 

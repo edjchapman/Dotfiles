@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# chezmoi-brew-record — append a brew/mas event to the pending-events journal.
+#
+# Invoked by the brew()/mas() shell wrappers in dot_zshrc. Reads:
+#   --rc CODE         exit code of the real brew/mas invocation
+#   --tool brew|mas   (default brew)
+#   -- ARGV...        the full argv passed to the wrapper
+#
+# Writes one NDJSON line per package to:
+#   ${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson
+#
+# Atomic short-write append on local FS — no flock needed.
+# Never fails loud: a stale config, missing chezmoi, or unwritable cache must
+# never propagate back to the user's brew exit code.
+
+set -uo pipefail
+
+RC=0
+TOOL=brew
+ARGV=()
+parsing_argv=0
+
+usage() {
+    cat <<'EOF'
+chezmoi-brew-record --rc CODE [--tool brew|mas] -- ARGV...
+
+Appends a structured record to the brew-inbox journal for later review by
+chezmoi-brew-sync. Skips events with non-zero rc or no detectable package name.
+EOF
+}
+
+while (($#)); do
+    if ((parsing_argv)); then
+        ARGV+=("$1")
+        shift
+        continue
+    fi
+    case "$1" in
+        --rc)
+            RC=$2
+            shift 2
+            ;;
+        --tool)
+            TOOL=$2
+            shift 2
+            ;;
+        --)
+            parsing_argv=1
+            shift
+            ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            # Unknown arg — bail silently. Never break the caller.
+            exit 0
+            ;;
+    esac
+done
+
+# Drop failed invocations entirely — better to under-record than to log a
+# package the user couldn't actually install.
+[[ $RC -eq 0 ]] || exit 0
+((${#ARGV[@]})) || exit 0
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox"
+mkdir -p "$CACHE_DIR" 2>/dev/null || exit 0
+JOURNAL="$CACHE_DIR/journal.ndjson"
+
+SUBCMD=${ARGV[0]:-}
+case "$SUBCMD" in
+    install | uninstall | reinstall | tap | untap | purchase) ;;
+    *) exit 0 ;;
+esac
+
+# Determine the Brewfile entry kind. mas wins over brew/cask; tap is its own
+# kind; --cask flips brew → cask; --formula/-formulae forces brew back.
+KIND=brew
+[[ $TOOL == mas ]] && KIND=mas
+[[ $SUBCMD == tap || $SUBCMD == untap ]] && KIND=tap
+
+ARG_TOKENS=()
+NAMES=()
+for arg in "${ARGV[@]:1}"; do
+    case "$arg" in
+        --cask | --casks) KIND=cask ;;
+        --formula | --formulae) [[ $KIND == cask ]] && KIND=brew ;;
+        --HEAD) ARG_TOKENS+=("HEAD") ;;
+        -*) ;; # ignore other flags
+        *) NAMES+=("$arg") ;;
+    esac
+done
+
+((${#NAMES[@]})) || exit 0
+
+# Canonicalize: mas "purchase" reads the same as install for journal purposes.
+OP=$SUBCMD
+[[ $OP == purchase ]] && OP=install
+
+ts=$(date +%s)
+
+# Build the JSON args array, e.g. ["HEAD"]. Empty if no captured tokens.
+args_json="["
+sep=""
+for tok in "${ARG_TOKENS[@]:-}"; do
+    [[ -z $tok ]] && continue
+    # JSON-escape: \ and " only — captured args are flag literals, no control chars.
+    esc=${tok//\\/\\\\}
+    esc=${esc//\"/\\\"}
+    args_json+="${sep}\"${esc}\""
+    sep=,
+done
+args_json+="]"
+
+for name in "${NAMES[@]}"; do
+    esc=${name//\\/\\\\}
+    esc=${esc//\"/\\\"}
+    # printf '%s\n' guarantees a single line + LF. >> with O_APPEND is
+    # short-write atomic on local filesystems; no lock needed for concurrent
+    # appenders.
+    printf '{"ts":%d,"op":"%s","kind":"%s","name":"%s","args":%s,"rc":%d}\n' \
+        "$ts" "$OP" "$KIND" "$esc" "$args_json" "$RC" >>"$JOURNAL" 2>/dev/null || exit 0
+done
+
+exit 0
