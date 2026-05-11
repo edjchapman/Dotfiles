@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# chezmoi-fix — single interactive entry point for remediating detected drift.
+#
+# Refreshes the drift cache, summarises what's pending across the three signals
+# (home-file drift, brew-bundle drift, brew-inbox journal), and dispatches to the
+# appropriate tool. Stateless: each option is one tool away.
+#
+# Designed to be the target of the shell banner. Banner says "drift detected →
+# run chezmoi-fix"; user types `chezmoi-fix` and walks a numbered menu.
+
+set -uo pipefail
+
+die() {
+    echo "chezmoi-fix: $*" >&2
+    exit 1
+}
+
+command -v chezmoi >/dev/null 2>&1 || die "chezmoi not installed"
+
+TTY=/dev/tty
+[[ -r $TTY && -w $TTY ]] || die "no tty available; chezmoi-fix is interactive"
+
+DRIFT_STATE="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-drift/state"
+INBOX_JOURNAL="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson"
+
+# Refresh drift counts up-front (quiet — we render our own summary). If the
+# refresh fails (e.g. broken Brewfile.tmpl), fall through to whatever cached
+# state is on disk; the menu will still surface the brew-inbox option.
+echo "==> Refreshing drift signals…"
+if command -v chezmoi-drift-check >/dev/null 2>&1; then
+    chezmoi-drift-check --full --quiet >/dev/null 2>&1 || true
+fi
+
+HOME_DRIFT=0
+BREW_MISSING=0
+BREW_EXTRA=0
+HAD_ERROR=0
+summary=
+if [[ -f $DRIFT_STATE ]]; then
+    # shellcheck disable=SC1090
+    source "$DRIFT_STATE" 2>/dev/null || true
+fi
+
+inbox_count=0
+[[ -s $INBOX_JOURNAL ]] && inbox_count=$(wc -l <"$INBOX_JOURNAL" | tr -d ' ')
+
+total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + inbox_count))
+
+echo
+echo "==> chezmoi-fix"
+if ((${HAD_ERROR:-0} > 0)); then
+    echo "   ${summary:-drift check encountered an error}"
+elif ((total == 0)); then
+    echo "   No drift detected. ${summary:-drift: clean}"
+    echo "   Nothing to fix."
+    exit 0
+else
+    echo "   ${summary:-drift detected}"
+    ((inbox_count > 0)) && echo "   brew inbox: ${inbox_count} event(s) pending"
+fi
+echo
+
+# Build menu entries. Each entry is "<id>|<label>". Options appear only when
+# their preconditions are met, so the menu never offers a no-op.
+OPTS=()
+
+((inbox_count > 0)) \
+    && OPTS+=("brew-sync|Merge ${inbox_count} brew event(s) into Brewfile.tmpl  →  chezmoi-brew-sync")
+
+((${HOME_DRIFT:-0} > 0)) \
+    && OPTS+=("diff|Preview ${HOME_DRIFT} home-file change(s)            →  chezmoi diff")
+
+if ((${HOME_DRIFT:-0} > 0 || ${BREW_MISSING:-0} > 0)); then
+    OPTS+=("apply|Apply pending changes                         →  chezmoi diff, then chezmoi apply")
+fi
+
+((${BREW_EXTRA:-0} > 0)) \
+    && OPTS+=("brew-extra|Investigate ${BREW_EXTRA} brew-extra package(s)        →  brew bundle cleanup --dry-run")
+
+# Phase 3 / Phase 4 scripts are picked up automatically once they land.
+if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
+    OPTS+=("defaults|Re-assert macOS defaults                       →  chezmoi-defaults-audit")
+fi
+if command -v chezmoi-security-audit >/dev/null 2>&1; then
+    OPTS+=("security|Security baseline check                        →  chezmoi-security-audit")
+fi
+
+# Always available.
+OPTS+=("doctor|Run chezmoi doctor (health diagnostic)         →  chezmoi doctor")
+OPTS+=("dismiss|Silence drift banner for this shell session     →  export CHEZMOI_DRIFT_QUIET=1")
+
+echo "What would you like to do?"
+for i in "${!OPTS[@]}"; do
+    label=${OPTS[i]#*|}
+    printf "  %d) %s\n" $((i + 1)) "$label"
+done
+echo "  q) Quit"
+echo
+
+read -r -p "Choice [q]: " reply <"$TTY"
+reply=${reply:-q}
+
+[[ $reply == q || $reply == Q ]] && exit 0
+
+if ! [[ $reply =~ ^[0-9]+$ ]] || ((reply < 1 || reply > ${#OPTS[@]})); then
+    die "invalid choice"
+fi
+
+id=${OPTS[$((reply - 1))]%%|*}
+
+case "$id" in
+    brew-sync) exec chezmoi-brew-sync ;;
+    diff) exec chezmoi diff ;;
+    apply)
+        echo
+        echo "==> chezmoi diff (review carefully before applying):"
+        chezmoi diff
+        echo
+        read -r -p "Run chezmoi apply now? [y/N] " confirm <"$TTY"
+        if [[ $confirm =~ ^[Yy]$ ]]; then
+            exec chezmoi apply
+        fi
+        echo "apply skipped — re-run chezmoi-fix when ready"
+        ;;
+    brew-extra)
+        # brew-extra is dangerous to auto-fix; surface the manual recipe instead.
+        # The user almost always wants to ADD the extras to Brewfile.tmpl (via
+        # chezmoi-brew-sync), not uninstall them.
+        rendered=$(mktemp -t brewfile-rendered.XXXXXX)
+        trap 'rm -f "$rendered"' EXIT
+        chezmoi execute-template <"$(chezmoi source-path)/Brewfile.tmpl" >"$rendered" 2>/dev/null
+        echo
+        echo "==> brew bundle cleanup --dry-run (packages not in Brewfile.tmpl):"
+        brew bundle cleanup --file="$rendered" || true
+        echo
+        echo "If you want to keep these — install them through Homebrew first, then run"
+        echo "chezmoi-brew-sync to record them in Brewfile.tmpl. If you want to remove"
+        echo "them, run: brew bundle cleanup --file=$rendered --force"
+        ;;
+    defaults) exec chezmoi-defaults-audit ;;
+    security) exec chezmoi-security-audit ;;
+    doctor) exec chezmoi doctor ;;
+    dismiss)
+        echo
+        echo "Run this in your current shell:"
+        echo "  export CHEZMOI_DRIFT_QUIET=1"
+        echo
+        echo "(The daily 09:30 launchd notification still fires. Unset on next login.)"
+        ;;
+esac
