@@ -84,10 +84,13 @@ fi
 parse_expectations() {
     (
         set +euo pipefail
+        # killall/echo/defaults are all invoked indirectly via `source "$DEFAULTS_SCRIPT"`
+        # below — silence shellcheck's "never invoked" note.
+        # shellcheck disable=SC2329
         killall() { :; }
+        # shellcheck disable=SC2329
         echo() { :; }
         # shellcheck disable=SC2329
-        # invoked indirectly via `source "$DEFAULTS_SCRIPT"` below
         defaults() {
             local currenthost=0
             if [[ ${1:-} == "-currentHost" ]]; then
