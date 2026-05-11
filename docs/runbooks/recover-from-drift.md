@@ -2,13 +2,23 @@
 
 `chezmoi verify` exits non-zero, or `chezmoi diff` shows changes you didn't make. This is "drift" — `$HOME` no longer matches the source state.
 
+## TL;DR — run `chezmoi-fix`
+
+For most drift, the answer is one command:
+
+```bash
+chezmoi-fix
+```
+
+That's an interactive menu that refreshes the drift cache, summarises pending work across all three signals (home-file drift, brew-bundle drift, brew-inbox journal), and dispatches to the right tool. Read the rest of this runbook only when `chezmoi-fix` reports an error or you want to understand a specific signal in depth.
+
 ## How drift surfaces
 
 Three machine-resident signals run automatically; you don't need to remember to check:
 
-- **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `drift: home: 1, brew-extra: 1 …`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
-- **Daily macOS notification.** The launchd agent `com.user.chezmoi-drift` (loaded from `~/Library/LaunchAgents/com.user.chezmoi-drift.plist`) runs at 09:30 and posts a Notification Center alert if drift is found. Logs at `~/Library/Logs/chezmoi-drift.log`.
-- **`brew` wrapper.** After `brew install/uninstall/reinstall/tap/untap`, the shell prints a reminder pointing at `Brewfile.tmpl` and refreshes the drift cache asynchronously.
+- **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `drift: home: 1, brew-extra: 1 · run chezmoi-fix to resolve`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
+- **Daily macOS notification.** The launchd agent `com.user.chezmoi-drift` (loaded from `~/Library/LaunchAgents/com.user.chezmoi-drift.plist`) runs at 09:30 and posts a Notification Center alert if drift is found. Logs at `~/Library/Logs/chezmoi-drift.log`. To swap the fire-and-forget notification for a clickable AppleScript dialog with a "Fix now" button that launches iTerm + `chezmoi-fix`, change `--notify` to `--alert` in the plist's ProgramArguments and reload (`launchctl unload` + `launchctl load`).
+- **`brew` / `mas` wrapper.** After `brew install/uninstall/reinstall/tap/untap` (or `mas install/uninstall/purchase`), the wrapper appends an event to `~/.cache/chezmoi-brew-inbox/journal.ndjson` and refreshes the drift cache asynchronously. The shell banner on the next session shows the pending count; `chezmoi-brew-sync` is the interactive merge tool that updates `Brewfile.tmpl` after your review. See [`brew-sync.md`](brew-sync.md).
 
 The single source of truth is the script `~/.local/bin/chezmoi-drift-check` — `make drift` is a shortcut for `chezmoi-drift-check --full`.
 
