@@ -1,0 +1,589 @@
+#!/usr/bin/env bash
+# chezmoi-brew-sync — interactively merge brew-inbox events into Brewfile.tmpl.
+#
+# Reads ~/.cache/chezmoi-brew-inbox/journal.ndjson, collapses install/uninstall
+# pairs, prompts for section + machine_type placement, validates the resulting
+# template, shows a diff, and on confirmation atomically replaces Brewfile.tmpl
+# and truncates the journal.
+#
+# Refuses to run while Brewfile.tmpl has uncommitted changes (pass --force to
+# stash first — never auto-pops). Mutex via mkdir (no flock on base macOS).
+
+set -uo pipefail
+
+FORCE=0
+DRY_RUN=0
+
+usage() {
+    cat <<'EOF'
+chezmoi-brew-sync [--force] [--dry-run] [-h]
+
+  --force    Stash Brewfile.tmpl changes before merging (never auto-pops).
+  --dry-run  Show what would change; do not edit, validate, or truncate.
+
+Reads the brew-inbox journal, prompts you for each pending event, and applies
+reviewed edits to Brewfile.tmpl. Aborts if Brewfile.tmpl has uncommitted
+changes, if jq is missing, or if validation fails.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE=1 ;;
+        --dry-run) DRY_RUN=1 ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "chezmoi-brew-sync: unknown arg: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+die() {
+    echo "chezmoi-brew-sync: $*" >&2
+    exit 1
+}
+
+command -v chezmoi >/dev/null 2>&1 || die "chezmoi not installed"
+command -v jq >/dev/null 2>&1 || die "jq required (brew install jq)"
+
+SRC=$(chezmoi source-path 2>/dev/null) || die "chezmoi source-path failed"
+BREWFILE="$SRC/Brewfile.tmpl"
+[[ -f $BREWFILE ]] || die "Brewfile.tmpl not found at $BREWFILE"
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox"
+JOURNAL="$CACHE_DIR/journal.ndjson"
+LOCK="$CACHE_DIR/.sync.lock"
+
+if [[ ! -s $JOURNAL ]]; then
+    echo "chezmoi-brew-sync: journal empty — nothing to do"
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# Mutex via mkdir. mkdir on an existing directory fails atomically, no race.
+# ------------------------------------------------------------------------------
+mkdir -p "$CACHE_DIR"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    die "another chezmoi-brew-sync is running (lock: $LOCK)"
+fi
+trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
+
+# ------------------------------------------------------------------------------
+# Git cleanliness gate. We never silently merge into a dirty Brewfile.tmpl —
+# that is the single biggest "lose user work" failure mode for this design.
+# ------------------------------------------------------------------------------
+if git -C "$SRC" diff --quiet -- Brewfile.tmpl 2>/dev/null; then
+    :
+else
+    if ((FORCE)); then
+        echo "==> Brewfile.tmpl is dirty. Stashing per --force (you must 'git stash pop' manually after)."
+        git -C "$SRC" stash push -m "chezmoi-brew-sync auto-stash" -- Brewfile.tmpl >/dev/null || die "stash failed"
+    else
+        die "Brewfile.tmpl has uncommitted changes. Commit, discard, or pass --force to stash."
+    fi
+fi
+
+# ------------------------------------------------------------------------------
+# Collapse the journal into final state per (kind, name). Latest event wins.
+# Output one line per resolved action: "<op>\t<kind>\t<name>\t<args_json>".
+# ------------------------------------------------------------------------------
+final_state=$(jq -rs '
+    map({key: (.kind + "\t" + .name), value: .}) |
+    from_entries |
+    to_entries |
+    map(.value) |
+    .[] |
+    [.op, .kind, .name, (.args // [] | @json)] |
+    @tsv
+' "$JOURNAL")
+
+if [[ -z $final_state ]]; then
+    echo "chezmoi-brew-sync: journal had only redundant/cancelled events"
+    ((DRY_RUN)) || : >"$JOURNAL"
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# Classify each resolved event against the current Brewfile.tmpl.
+# ------------------------------------------------------------------------------
+brewfile_has_entry() {
+    local kind=$1 name=$2 esc
+    # Escape regex specials in name (e.g., dots in package@version).
+    esc=$(printf '%s' "$name" | sed 's/[][\\/.^$*?+(){}|]/\\&/g')
+    case "$kind" in
+        brew) grep -Eq "^[[:space:]]*brew[[:space:]]+\"${esc}\"([[:space:]]*,|[[:space:]]*$)" "$BREWFILE" ;;
+        cask) grep -Eq "^[[:space:]]*cask[[:space:]]+\"${esc}\"[[:space:]]*$" "$BREWFILE" ;;
+        tap) grep -Eq "^[[:space:]]*tap[[:space:]]+\"${esc}\"[[:space:]]*$" "$BREWFILE" ;;
+        mas) grep -Eq "id:[[:space:]]*${esc}[[:space:]]*$" "$BREWFILE" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Build the list of actions: (op, kind, name, args_json)
+# op is normalized to either "add" or "remove".
+ACTIONS=()
+SKIPPED=()
+while IFS=$'\t' read -r ev_op ev_kind ev_name ev_args; do
+    [[ -z $ev_op ]] && continue
+    case "$ev_op" in
+        install | reinstall | tap)
+            if brewfile_has_entry "$ev_kind" "$ev_name"; then
+                SKIPPED+=("$ev_kind \"$ev_name\" — already in Brewfile.tmpl")
+            else
+                ACTIONS+=("add"$'\t'"$ev_kind"$'\t'"$ev_name"$'\t'"$ev_args")
+            fi
+            ;;
+        uninstall | untap)
+            if brewfile_has_entry "$ev_kind" "$ev_name"; then
+                ACTIONS+=("remove"$'\t'"$ev_kind"$'\t'"$ev_name"$'\t'"$ev_args")
+            else
+                SKIPPED+=("$ev_kind \"$ev_name\" — not in Brewfile.tmpl")
+            fi
+            ;;
+    esac
+done <<<"$final_state"
+
+if ((${#ACTIONS[@]} == 0)); then
+    echo "chezmoi-brew-sync: no net changes after dedup."
+    for s in "${SKIPPED[@]:-}"; do [[ -n $s ]] && echo "  - $s"; done
+    ((DRY_RUN)) || : >"$JOURNAL"
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# Section discovery. Walks Brewfile.tmpl once, records:
+#   index | name | header_line | in_conditional (1 inside any {{ if ... }} block)
+# ------------------------------------------------------------------------------
+SECTION_NAMES=()
+SECTION_LINES=()
+SECTION_COND=()
+
+while IFS=$'\t' read -r idx hdr_line cond name; do
+    [[ -z $idx ]] && continue
+    SECTION_NAMES+=("$name")
+    SECTION_LINES+=("$hdr_line")
+    SECTION_COND+=("$cond")
+done < <(awk '
+    BEGIN { depth=0; idx=0; pending_name=""; pending_line=0; pending_cond=0; has_entry=0 }
+    /^\{\{[[:space:]]*if[[:space:]]/      { depth++ }
+    /^\{\{[[:space:]]*end[[:space:]]*-?}}/ { if (depth>0) depth-- }
+    /^#[[:space:]]+/ {
+        # Buffer this header; emit only when the section actually contains an entry.
+        # That suppresses pure-comment file preambles like "# Homebrew Bundle".
+        name = $0
+        sub(/^#[[:space:]]+/, "", name)
+        pending_name = name
+        pending_line = NR
+        pending_cond = (depth>0) ? 1 : 0
+        has_entry = 0
+        next
+    }
+    /^[[:space:]]*(brew|cask|tap|mas|vscode)[[:space:]]+"/ {
+        if (pending_name != "" && !has_entry) {
+            idx++
+            printf "%d\t%d\t%d\t%s\n", idx, pending_line, pending_cond, pending_name
+            has_entry = 1
+        }
+    }
+' "$BREWFILE")
+
+if ((${#SECTION_NAMES[@]} == 0)); then
+    die "could not detect any '# ' section headers in Brewfile.tmpl"
+fi
+
+# ------------------------------------------------------------------------------
+# Suggest a default section based on kind + name hints.
+# ------------------------------------------------------------------------------
+suggest_section_index() {
+    local kind=$1 name=$2 lc i
+    lc=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')
+    # cask: keyword routing
+    if [[ $kind == cask ]]; then
+        for i in "${!SECTION_NAMES[@]}"; do
+            local s=${SECTION_NAMES[i]}
+            case "$lc" in
+                *browser* | *chrome* | *firefox* | *brave* | *tor* | *safari*)
+                    [[ $s == *Browsers* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *code* | *cursor* | *jetbrains* | *iterm* | *docker* | *postgres* | *postico* | *windsurf* | *orbstack*)
+                    [[ $s == *"Dev Tools"* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *slack* | *notion* | *obsidian* | *teams* | *microsoft-word* | *office* | *google* | *alfred*)
+                    [[ $s == *Productivity* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *font-* | *bluesnooze*)
+                    [[ $s == *Utilities* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *vpn* | *gpg* | *lulu* | *proton* | *1password* | *bitwarden*)
+                    [[ $s == *"Privacy & Security"* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *chatgpt* | *claude* | *gpt* | *gemini*)
+                    [[ $s == *AI* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *steam* | *tidal* | *spotify* | *whatsapp* | *signal* | *discord*)
+                    [[ $s == *"Media & Social"* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+                *monero* | *sparrow* | *bitcoin* | *wallet*)
+                    [[ $s == *Crypto* ]] && {
+                        echo $((i + 1))
+                        return
+                    }
+                    ;;
+            esac
+        done
+        # Fallback: first cask-ish section
+        for i in "${!SECTION_NAMES[@]}"; do
+            [[ ${SECTION_NAMES[i]} == *Desktop* ]] && {
+                echo $((i + 1))
+                return
+            }
+        done
+    fi
+    if [[ $kind == brew ]]; then
+        for i in "${!SECTION_NAMES[@]}"; do
+            [[ ${SECTION_NAMES[i]} == "CLI Tools" ]] && {
+                echo $((i + 1))
+                return
+            }
+        done
+    fi
+    if [[ $kind == mas ]]; then
+        for i in "${!SECTION_NAMES[@]}"; do
+            [[ ${SECTION_NAMES[i]} == *"Mac App Store"* ]] && {
+                echo $((i + 1))
+                return
+            }
+        done
+    fi
+    if [[ $kind == tap ]]; then
+        for i in "${!SECTION_NAMES[@]}"; do
+            [[ ${SECTION_NAMES[i]} == *Taps* ]] && {
+                echo $((i + 1))
+                return
+            }
+        done
+    fi
+    echo 1
+}
+
+format_line() {
+    local kind=$1 name=$2 args=$3 args_inner
+    case "$kind" in
+        brew)
+            if [[ $args != "[]" && -n $args ]]; then
+                # args looks like ["HEAD"]; transform to ", args: [\"HEAD\"]"
+                args_inner=$(printf '%s' "$args" | jq -r 'map("\"" + . + "\"") | join(", ")')
+                printf 'brew "%s", args: [%s]' "$name" "$args_inner"
+            else
+                printf 'brew "%s"' "$name"
+            fi
+            ;;
+        cask) printf 'cask "%s"' "$name" ;;
+        tap) printf 'tap "%s"' "$name" ;;
+        mas)
+            # The journal has only the numeric id under "name". Prompt the user
+            # for a human-readable name on insert (handled in the interactive loop).
+            printf 'mas "PLACEHOLDER", id: %s' "$name"
+            ;;
+        *) printf '# unknown kind %s: %s' "$kind" "$name" ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Interactive loop.
+# ------------------------------------------------------------------------------
+TTY=/dev/tty
+[[ -r $TTY && -w $TTY ]] || die "no tty available; sync requires an interactive shell"
+
+echo
+echo "==> chezmoi-brew-sync — ${#ACTIONS[@]} pending action(s)"
+echo
+
+# Each plan entry: "add|remove\tkind\tname\targs_json\tsection_idx\twrap_personal\tdisplay_line"
+PLAN=()
+
+idx=0
+for action in "${ACTIONS[@]}"; do
+    idx=$((idx + 1))
+    IFS=$'\t' read -r op kind name args <<<"$action"
+
+    if [[ $op == "remove" ]]; then
+        echo "[$idx/${#ACTIONS[@]}] remove $kind \"$name\""
+        read -r -p "  Remove this entry from Brewfile.tmpl? [Y/n] " reply <"$TTY"
+        if [[ ${reply:-y} =~ ^[Nn]$ ]]; then
+            echo "  → skipped"
+            continue
+        fi
+        PLAN+=("remove"$'\t'"$kind"$'\t'"$name"$'\t'""$'\t'"0"$'\t'"0"$'\t'"")
+        echo
+        continue
+    fi
+
+    # op == add
+    display_name=$name
+    if [[ $kind == mas ]]; then
+        echo "[$idx/${#ACTIONS[@]}] add mas app id $name"
+        read -r -p "  App name (try \`mas info $name\` to look up): " mas_name <"$TTY"
+        [[ -z $mas_name ]] && {
+            echo "  → name required, skipped"
+            continue
+        }
+        display_name=$mas_name
+    else
+        echo "[$idx/${#ACTIONS[@]}] add $kind \"$name\""
+    fi
+
+    suggested=$(suggest_section_index "$kind" "$name")
+    echo "  Sections:"
+    for i in "${!SECTION_NAMES[@]}"; do
+        marker="  "
+        ((i + 1 == suggested)) && marker="* "
+        cond_tag=""
+        ((SECTION_COND[i])) && cond_tag=" (personal-only)"
+        printf "    %s%2d) %s%s\n" "$marker" $((i + 1)) "${SECTION_NAMES[i]}" "$cond_tag"
+    done
+    read -r -p "  Section number [${suggested}] (or 's' to skip): " reply <"$TTY"
+    reply=${reply:-$suggested}
+    if [[ $reply == "s" || $reply == "S" ]]; then
+        echo "  → skipped"
+        continue
+    fi
+    if ! [[ $reply =~ ^[0-9]+$ ]] || ((reply < 1 || reply > ${#SECTION_NAMES[@]})); then
+        echo "  → invalid section, skipped"
+        continue
+    fi
+    sect_idx=$reply
+    sect_cond=${SECTION_COND[$((sect_idx - 1))]}
+
+    wrap_personal=0
+    if ((sect_cond == 0)); then
+        read -r -p "  Wrap in {{ if eq .machine_type \"personal\" }} block? [y/N] " reply <"$TTY"
+        [[ ${reply:-n} =~ ^[Yy]$ ]] && wrap_personal=1
+    fi
+
+    line=$(format_line "$kind" "$display_name" "$args")
+    PLAN+=("add"$'\t'"$kind"$'\t'"$display_name"$'\t'"$args"$'\t'"$sect_idx"$'\t'"$wrap_personal"$'\t'"$line")
+    echo "  → $line"
+    echo
+done
+
+if ((${#PLAN[@]} == 0)); then
+    echo "No actions selected. Journal preserved."
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# Apply the plan against a temp copy of Brewfile.tmpl.
+# ------------------------------------------------------------------------------
+WORK=$(mktemp -t brewfile-sync.XXXXXX)
+trap 'rmdir "$LOCK" 2>/dev/null || true; rm -f "$WORK"' EXIT INT TERM HUP
+cp "$BREWFILE" "$WORK"
+
+apply_remove() {
+    local kind=$1 name=$2 esc tmp
+    esc=$(printf '%s' "$name" | sed 's/[][\\/.^$*?+(){}|]/\\&/g')
+    tmp=$(mktemp -t brewfile-rm.XXXXXX)
+    case "$kind" in
+        brew) awk -v p="^[[:space:]]*brew[[:space:]]+\"${esc}\"([[:space:]]*,|[[:space:]]*\$)" '$0 !~ p {print}' "$WORK" >"$tmp" ;;
+        cask) awk -v p="^[[:space:]]*cask[[:space:]]+\"${esc}\"[[:space:]]*\$" '$0 !~ p {print}' "$WORK" >"$tmp" ;;
+        tap) awk -v p="^[[:space:]]*tap[[:space:]]+\"${esc}\"[[:space:]]*\$" '$0 !~ p {print}' "$WORK" >"$tmp" ;;
+        mas) awk -v p="id:[[:space:]]*${esc}[[:space:]]*\$" '$0 !~ p {print}' "$WORK" >"$tmp" ;;
+    esac
+    mv "$tmp" "$WORK"
+}
+
+apply_add() {
+    local kind=$1 line=$2 sect_idx=$3 wrap=$4
+    local sect_start=${SECTION_LINES[$((sect_idx - 1))]}
+    # Find the end of the section: next section header line, or EOF.
+    local sect_end
+    if ((sect_idx < ${#SECTION_LINES[@]})); then
+        sect_end=$((${SECTION_LINES[$sect_idx]} - 1))
+    else
+        sect_end=$(wc -l <"$WORK" | tr -d ' ')
+    fi
+
+    # Within the section, find alphabetical insert position for same-kind lines.
+    local tmp insert_at
+    tmp=$(mktemp -t brewfile-add.XXXXXX)
+    insert_at=$(awk -v s="$sect_start" -v e="$sect_end" -v kind="$kind" -v line="$line" '
+        BEGIN {
+            # Extract package name from new line (text inside first quotes).
+            match(line, /"[^"]+"/)
+            new_name = substr(line, RSTART+1, RLENGTH-2)
+            target = 0
+            last_entry = 0
+        }
+        NR > s && NR <= e {
+            cur = $0
+            sub(/^[[:space:]]+/, "", cur)
+            prefix = ""
+            if (kind == "brew" && cur ~ /^brew[[:space:]]+"/) prefix = "brew"
+            else if (kind == "cask" && cur ~ /^cask[[:space:]]+"/) prefix = "cask"
+            else if (kind == "tap" && cur ~ /^tap[[:space:]]+"/) prefix = "tap"
+            else if (kind == "mas" && cur ~ /^mas[[:space:]]+"/) prefix = "mas"
+            if (prefix != "") {
+                last_entry = NR
+                match(cur, /"[^"]+"/)
+                cn = substr(cur, RSTART+1, RLENGTH-2)
+                if (cn > new_name && target == 0) target = NR
+            }
+        }
+        END {
+            # If no greater entry found, append right after the last same-kind
+            # entry (avoids landing past a trailing blank line between sections).
+            # If the section has no same-kind entries at all, insert immediately
+            # after the section header.
+            if (target == 0) target = (last_entry > 0) ? last_entry + 1 : s + 1
+            print target
+        }
+    ' "$WORK")
+
+    if ((wrap)); then
+        # Insert the line wrapped in its own conditional block right before insert_at.
+        awk -v at="$insert_at" -v line="$line" '
+            NR == at {
+                print "{{ if eq .machine_type \"personal\" -}}"
+                print line
+                print "{{ end -}}"
+            }
+            { print }
+        ' "$WORK" >"$tmp"
+    else
+        awk -v at="$insert_at" -v line="$line" 'NR == at { print line } { print }' "$WORK" >"$tmp"
+    fi
+
+    mv "$tmp" "$WORK"
+    # Section lines after this one have shifted; recompute on the fly next time.
+    rescan_sections
+}
+
+rescan_sections() {
+    local i=0
+    SECTION_NAMES=()
+    SECTION_LINES=()
+    SECTION_COND=()
+    while IFS=$'\t' read -r idx hdr_line cond name; do
+        [[ -z $idx ]] && continue
+        SECTION_NAMES+=("$name")
+        SECTION_LINES+=("$hdr_line")
+        SECTION_COND+=("$cond")
+        i=$((i + 1))
+    done < <(awk '
+        BEGIN { depth=0; idx=0; pending_name=""; pending_line=0; pending_cond=0; has_entry=0 }
+        /^\{\{[[:space:]]*if[[:space:]]/      { depth++ }
+        /^\{\{[[:space:]]*end[[:space:]]*-?}}/ { if (depth>0) depth-- }
+        /^#[[:space:]]+/ {
+            name = $0
+            sub(/^#[[:space:]]+/, "", name)
+            pending_name = name
+            pending_line = NR
+            pending_cond = (depth>0) ? 1 : 0
+            has_entry = 0
+            next
+        }
+        /^[[:space:]]*(brew|cask|tap|mas|vscode)[[:space:]]+"/ {
+            if (pending_name != "" && !has_entry) {
+                idx++
+                printf "%d\t%d\t%d\t%s\n", idx, pending_line, pending_cond, pending_name
+                has_entry = 1
+            }
+        }
+    ' "$WORK")
+}
+
+# Apply removes first so insert positions are stable per-add.
+for entry in "${PLAN[@]}"; do
+    IFS=$'\t' read -r op kind name args sect_idx wrap line <<<"$entry"
+    [[ $op == "remove" ]] && apply_remove "$kind" "$name"
+done
+rescan_sections
+for entry in "${PLAN[@]}"; do
+    IFS=$'\t' read -r op kind name args sect_idx wrap line <<<"$entry"
+    [[ $op == "add" ]] && apply_add "$kind" "$line" "$sect_idx" "$wrap"
+done
+
+# ------------------------------------------------------------------------------
+# Validate: render the new Brewfile.tmpl across the matrix. On failure, abort.
+# ------------------------------------------------------------------------------
+echo
+echo "==> Validating template across machine_type × arch matrix..."
+validation_failed=0
+for mt in personal work; do
+    for arch in arm64 amd64; do
+        if ! chezmoi execute-template \
+            --init --source="$SRC" \
+            --override-data "{\"machine_type\":\"$mt\",\"gpg_signing_key\":\"test\",\"chezmoi\":{\"arch\":\"$arch\"}}" \
+            <"$WORK" >/dev/null 2>&1; then
+            echo "  FAIL: machine_type=$mt arch=$arch"
+            validation_failed=1
+        fi
+    done
+done
+
+if ((validation_failed)); then
+    die "template validation failed — Brewfile.tmpl NOT modified, journal preserved. Inspect: $WORK"
+fi
+echo "  ✓ All 4 combinations render cleanly."
+
+# ------------------------------------------------------------------------------
+# Show diff against the live source, then prompt to commit.
+# ------------------------------------------------------------------------------
+echo
+echo "==> Diff vs current Brewfile.tmpl:"
+diff -u "$BREWFILE" "$WORK" || true
+
+if ((DRY_RUN)); then
+    echo
+    echo "--dry-run: not modifying Brewfile.tmpl or journal."
+    exit 0
+fi
+
+echo
+read -r -p "Apply these changes and truncate journal? [y/N] " reply <"$TTY"
+if ! [[ ${reply:-n} =~ ^[Yy]$ ]]; then
+    echo "Aborted. Brewfile.tmpl unchanged, journal preserved."
+    exit 0
+fi
+
+# Atomic replacement: write to .tmp.$$, mv into place.
+final_tmp="$BREWFILE.tmp.$$"
+if ! cp "$WORK" "$final_tmp"; then
+    die "atomic replace failed (cp)"
+fi
+if ! mv -f "$final_tmp" "$BREWFILE"; then
+    rm -f "$final_tmp"
+    die "atomic replace failed (mv)"
+fi
+
+# Truncate the journal only after the file is in place.
+: >"$JOURNAL"
+
+echo "✓ Brewfile.tmpl updated. Journal cleared."
+echo "Next: run 'chezmoi diff' then 'chezmoi apply' to install."

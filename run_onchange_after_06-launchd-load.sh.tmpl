@@ -1,22 +1,22 @@
 #!/bin/bash
-# Reload chezmoi-drift launchd agent whenever its plist content changes.
-# Hash include forces re-run on plist edits:
+# Reload chezmoi launchd agents whenever any tracked plist content changes.
+# Hash includes force re-run on plist edits:
 # {{ include "private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl" | sha256sum }}
+# {{ include "private_Library/LaunchAgents/com.user.chezmoi-brew-inbox.plist.tmpl" | sha256sum }}
 
 set -euo pipefail
 
-PLIST="$HOME/Library/LaunchAgents/com.user.chezmoi-drift.plist"
-
-if [[ ! -f "$PLIST" ]]; then
-    echo "chezmoi-drift plist missing at $PLIST; skipping launchctl load"
-    exit 0
-fi
-
-# Ensure log dir exists for StandardOutPath/StandardErrorPath.
+# Ensure log dir exists for StandardOutPath/StandardErrorPath in every plist.
 mkdir -p "$HOME/Library/Logs"
 
-# Best-effort unload (ignore "not loaded" errors), then load.
-launchctl unload "$PLIST" 2>/dev/null || true
-launchctl load "$PLIST"
-
-echo "Loaded launchd agent: com.user.chezmoi-drift"
+for label in com.user.chezmoi-drift com.user.chezmoi-brew-inbox; do
+    plist="$HOME/Library/LaunchAgents/${label}.plist"
+    if [[ ! -f "$plist" ]]; then
+        echo "${label} plist missing at ${plist}; skipping launchctl load"
+        continue
+    fi
+    # Best-effort unload (ignore "not loaded" errors), then load.
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load "$plist"
+    echo "Loaded launchd agent: ${label}"
+done
