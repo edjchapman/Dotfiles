@@ -34,6 +34,7 @@ fi
 HOME_DRIFT=0
 BREW_MISSING=0
 BREW_EXTRA=0
+DEFAULTS_DRIFT=0
 HAD_ERROR=0
 summary=
 if [[ -f $DRIFT_STATE ]]; then
@@ -44,7 +45,7 @@ fi
 inbox_count=0
 [[ -s $INBOX_JOURNAL ]] && inbox_count=$(wc -l <"$INBOX_JOURNAL" | tr -d ' ')
 
-total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + inbox_count))
+total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + inbox_count))
 
 echo
 echo "==> chezmoi-fix"
@@ -79,7 +80,12 @@ fi
 
 # Phase 3 / Phase 4 scripts are picked up automatically once they land.
 if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
-    OPTS+=("defaults|Re-assert macOS defaults                       →  chezmoi-defaults-audit")
+    if ((${DEFAULTS_DRIFT:-0} > 0)); then
+        OPTS+=("defaults|Inspect ${DEFAULTS_DRIFT} macOS defaults drift            →  chezmoi-defaults-audit --drift")
+        OPTS+=("defaults-apply|Re-assert macOS defaults                       →  chezmoi-defaults-audit --apply")
+    else
+        OPTS+=("defaults|Audit macOS defaults (no known drift)         →  chezmoi-defaults-audit")
+    fi
 fi
 if command -v chezmoi-security-audit >/dev/null 2>&1; then
     OPTS+=("security|Security baseline check                        →  chezmoi-security-audit")
@@ -137,7 +143,8 @@ case "$id" in
         echo "chezmoi-brew-sync to record them in Brewfile.tmpl. If you want to remove"
         echo "them, run: brew bundle cleanup --file=$rendered --force"
         ;;
-    defaults) exec chezmoi-defaults-audit ;;
+    defaults) exec chezmoi-defaults-audit --drift ;;
+    defaults-apply) exec chezmoi-defaults-audit --apply ;;
     security) exec chezmoi-security-audit ;;
     doctor) exec chezmoi doctor ;;
     dismiss)

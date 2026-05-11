@@ -84,6 +84,7 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
     HOME_DRIFT=
     BREW_MISSING=
     BREW_EXTRA=
+    DEFAULTS_DRIFT=0
     HAD_ERROR=0
     summary=
     # shellcheck disable=SC1090
@@ -91,13 +92,15 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
     # Validate every required field parsed as a non-negative integer.
     # If any is missing/non-numeric, the cache file is partial or schema-drifted —
     # fall through to the full check rather than silently report stale counts.
+    # DEFAULTS_DRIFT is forward-compatible: if absent, treat as 0 (older cache).
     if [[ $HOME_DRIFT =~ ^[0-9]+$ &&
         $BREW_MISSING =~ ^[0-9]+$ &&
         $BREW_EXTRA =~ ^[0-9]+$ &&
+        ${DEFAULTS_DRIFT:-0} =~ ^[0-9]+$ &&
         -n $summary ]]; then
         emit "$summary"
         [[ ${HAD_ERROR:-0} -gt 0 ]] && exit 2
-        [[ $((HOME_DRIFT + BREW_MISSING + BREW_EXTRA)) -gt 0 ]] && exit 1
+        [[ $((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + ${DEFAULTS_DRIFT:-0})) -gt 0 ]] && exit 1
         exit 0
     fi
     # Cache invalid; fall through to full check.
@@ -107,6 +110,7 @@ fi
 HOME_DRIFT=0
 BREW_MISSING=0
 BREW_EXTRA=0
+DEFAULTS_DRIFT=0
 HAD_ERROR=0
 err_parts=""
 
@@ -150,10 +154,25 @@ if command -v brew >/dev/null 2>&1; then
     fi
 fi
 
+# macOS defaults drift — counts settings that diverged from the source script.
+# The audit is best-effort; if it fails entirely, record the error but don't
+# poison the other counts. Skipped silently when the audit tool isn't on PATH
+# (e.g., during early bootstrap before chezmoi apply has run).
+if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
+    if audit_out=$(chezmoi-defaults-audit --quiet 2>/dev/null); then
+        DEFAULTS_DRIFT=$(printf '%s' "$audit_out" | awk -F'\t' '{print $2}')
+        [[ $DEFAULTS_DRIFT =~ ^[0-9]+$ ]] || DEFAULTS_DRIFT=0
+    else
+        HAD_ERROR=1
+        err_parts="${err_parts:+$err_parts; }defaults audit failed"
+    fi
+fi
+
 parts=""
 [[ $HOME_DRIFT -gt 0 ]] && parts="${parts:+$parts, }home: $HOME_DRIFT"
 [[ $BREW_MISSING -gt 0 ]] && parts="${parts:+$parts, }brew-missing: $BREW_MISSING"
 [[ $BREW_EXTRA -gt 0 ]] && parts="${parts:+$parts, }brew-extra: $BREW_EXTRA"
+[[ $DEFAULTS_DRIFT -gt 0 ]] && parts="${parts:+$parts, }defaults: $DEFAULTS_DRIFT"
 
 if [[ $HAD_ERROR -eq 1 ]]; then
     if [[ -n $parts ]]; then
@@ -173,6 +192,7 @@ if {
     printf 'HOME_DRIFT=%s\n' "$HOME_DRIFT"
     printf 'BREW_MISSING=%s\n' "$BREW_MISSING"
     printf 'BREW_EXTRA=%s\n' "$BREW_EXTRA"
+    printf 'DEFAULTS_DRIFT=%s\n' "$DEFAULTS_DRIFT"
     printf 'HAD_ERROR=%s\n' "$HAD_ERROR"
     printf 'CHECKED_AT=%s\n' "$(date +%s)"
     printf 'summary=%q\n' "$summary"
@@ -184,7 +204,7 @@ fi
 
 emit "$summary"
 
-total=$((HOME_DRIFT + BREW_MISSING + BREW_EXTRA))
+total=$((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + DEFAULTS_DRIFT))
 if [[ $NOTIFY -eq 1 && ($total -gt 0 || $HAD_ERROR -eq 1) ]]; then
     # Escape backslashes and double-quotes for AppleScript string interpolation.
     notify_body=${summary//\\/\\\\}

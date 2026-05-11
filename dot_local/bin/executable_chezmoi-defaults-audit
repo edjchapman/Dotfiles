@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# chezmoi-defaults-audit — compare live macOS defaults against the values set
+# by run_onchange_03-macos-defaults.sh.
+#
+# The source script only re-runs when its content hash changes; this audit
+# detects when the user has toggled a setting via System Settings since the
+# last apply. Counts feed into chezmoi-drift-check's DEFAULTS_DRIFT field.
+#
+# Modes:
+#   (default)  Print human-readable counts.
+#   --drift    Also list each drifted entry.
+#   --quiet    TSV output for machine consumers: "<matched>\t<mismatched>\t<unreadable>".
+#   --apply    Re-run the source defaults script (re-asserts everything).
+#
+# Exit: 0 clean, 1 drift, 2 audit error.
+
+set -uo pipefail
+
+PRINT_DRIFT=0
+QUIET=0
+APPLY=0
+
+usage() {
+    cat <<'EOF'
+chezmoi-defaults-audit [--drift] [--quiet] [--apply] [-h]
+
+  (no flag)  Print matched/mismatched/unreadable counts.
+  --drift    Also list each drifted entry.
+  --quiet    TSV output: "<matched>\t<mismatched>\t<unreadable>".
+  --apply    Re-run run_onchange_03-macos-defaults.sh to re-assert all values.
+
+Exit codes: 0 clean, 1 drift detected, 2 audit error.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --drift) PRINT_DRIFT=1 ;;
+        --quiet) QUIET=1 ;;
+        --apply) APPLY=1 ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "chezmoi-defaults-audit: unknown arg: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+command -v chezmoi >/dev/null 2>&1 || {
+    echo "chezmoi-defaults-audit: chezmoi not installed" >&2
+    exit 2
+}
+
+SRC=$(chezmoi source-path 2>/dev/null) || {
+    echo "chezmoi-defaults-audit: chezmoi source-path failed" >&2
+    exit 2
+}
+DEFAULTS_SCRIPT="$SRC/run_onchange_03-macos-defaults.sh"
+[[ -f $DEFAULTS_SCRIPT ]] || {
+    echo "chezmoi-defaults-audit: $DEFAULTS_SCRIPT missing" >&2
+    exit 2
+}
+
+# --apply re-runs the source script in place. Effectively forces re-assertion
+# of every `defaults write` line. Chezmoi tracks run_onchange state by content
+# hash, so this does not interfere with chezmoi's bookkeeping — the next apply
+# is a no-op as long as the hash hasn't changed.
+if ((APPLY)); then
+    exec /bin/bash "$DEFAULTS_SCRIPT"
+fi
+
+# ------------------------------------------------------------------------------
+# Parse expectations from the defaults script.
+#
+# Sourcing the script in a subshell with `defaults` overridden as a shell
+# function captures fully-parsed argv (post quote/expansion). The function
+# emits one TSV line per `defaults write` call.
+# `killall` and `echo` are stubbed so side effects don't pollute output.
+# ------------------------------------------------------------------------------
+parse_expectations() {
+    (
+        set +euo pipefail
+        # killall/echo/defaults are all invoked indirectly via `source "$DEFAULTS_SCRIPT"`
+        # below — silence shellcheck's "never invoked" note.
+        # shellcheck disable=SC2329
+        killall() { :; }
+        # shellcheck disable=SC2329
+        echo() { :; }
+        # shellcheck disable=SC2329
+        defaults() {
+            local currenthost=0
+            if [[ ${1:-} == "-currentHost" ]]; then
+                currenthost=1
+                shift
+            fi
+            if [[ ${1:-} != "write" ]]; then
+                return 0
+            fi
+            shift
+            local domain=$1 key=$2 type value
+            shift 2
+            if [[ ${1:-} == -* ]]; then
+                type=$1
+                shift
+                value=$*
+            else
+                # Typeless write (older syntax) — treat as string.
+                type=-string
+                value=$*
+            fi
+            printf '%d\t%s\t%s\t%s\t%s\n' "$currenthost" "$domain" "$key" "$type" "$value"
+        }
+        # shellcheck disable=SC1090
+        source "$DEFAULTS_SCRIPT" 2>/dev/null
+    )
+}
+
+# `defaults write -bool` accepts true/false/yes/no/1/0; `defaults read` always
+# returns 1 or 0. Normalise both sides for comparison.
+normalize_bool() {
+    case "${1,,}" in
+        true | yes | 1) echo 1 ;;
+        false | no | 0) echo 0 ;;
+        *) echo "$1" ;;
+    esac
+}
+
+MATCHED=0
+MISMATCHED=0
+UNREADABLE=0
+DRIFT_LINES=()
+
+while IFS=$'\t' read -r ch domain key type expected; do
+    [[ -z $domain ]] && continue
+    read_cmd=(defaults)
+    ((ch)) && read_cmd+=("-currentHost")
+    read_cmd+=(read "$domain" "$key")
+    live=$("${read_cmd[@]}" 2>/dev/null)
+    rc=$?
+    if ((rc != 0)); then
+        UNREADABLE=$((UNREADABLE + 1))
+        continue
+    fi
+    case "$type" in
+        -bool)
+            exp_n=$(normalize_bool "$expected")
+            live_n=$(normalize_bool "$live")
+            ;;
+        *)
+            exp_n=$expected
+            live_n=$live
+            ;;
+    esac
+    if [[ $exp_n == "$live_n" ]]; then
+        MATCHED=$((MATCHED + 1))
+    else
+        MISMATCHED=$((MISMATCHED + 1))
+        DRIFT_LINES+=("$domain :: $key  (expected: $expected, live: $live)")
+    fi
+done < <(parse_expectations)
+
+if ((QUIET)); then
+    printf '%d\t%d\t%d\n' "$MATCHED" "$MISMATCHED" "$UNREADABLE"
+else
+    echo "macOS defaults audit:"
+    printf '  matched:     %d\n' "$MATCHED"
+    printf '  mismatched:  %d\n' "$MISMATCHED"
+    printf '  unreadable:  %d  (typically system-protected paths)\n' "$UNREADABLE"
+    if ((${#DRIFT_LINES[@]} > 0 && PRINT_DRIFT)); then
+        echo
+        echo "Drift:"
+        for l in "${DRIFT_LINES[@]}"; do
+            printf '  - %s\n' "$l"
+        done
+    elif ((MISMATCHED > 0)); then
+        echo
+        echo "Re-run with --drift to see specifics, or --apply to re-assert."
+    fi
+fi
+
+((MISMATCHED > 0)) && exit 1
+exit 0
