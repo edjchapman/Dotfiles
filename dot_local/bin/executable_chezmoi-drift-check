@@ -18,16 +18,19 @@ STATE_FILE="$CACHE_DIR/state"
 TTL="${CHEZMOI_DRIFT_TTL:-14400}"
 MODE=brief
 NOTIFY=0
+ALERT=0
 QUIET=0
 
 usage() {
     cat <<'EOF'
-chezmoi-drift-check [--brief|--full] [--notify] [--quiet]
+chezmoi-drift-check [--brief|--full] [--notify|--alert] [--quiet]
 
   --brief   (default) Use cached state if newer than $CHEZMOI_DRIFT_TTL (default 4h);
             otherwise re-run all checks.
   --full    Always re-run all checks, ignoring the cache.
-  --notify  Post a macOS notification if drift is detected.
+  --notify  Post a macOS Notification Center alert if drift is detected (fire-and-forget).
+  --alert   Post a clickable AppleScript dialog with a "Fix now" button that launches
+            chezmoi-fix in iTerm. Auto-dismisses after 90 seconds. Implies --notify is not used.
   --quiet   Suppress stdout; exit code only.
 
 Exit codes: 0 clean, 1 drift, 2 error (a check could not be run).
@@ -40,6 +43,7 @@ for arg in "$@"; do
         --brief) MODE=brief ;;
         --full) MODE=full ;;
         --notify) NOTIFY=1 ;;
+        --alert) ALERT=1 ;;
         --quiet) QUIET=1 ;;
         -h | --help)
             usage
@@ -226,11 +230,55 @@ fi
 emit "$summary"
 
 total=$((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + DEFAULTS_DRIFT + SECURITY_DRIFT))
-if [[ $NOTIFY -eq 1 && ($total -gt 0 || $HAD_ERROR -eq 1) ]]; then
+should_notify=0
+[[ $NOTIFY -eq 1 || $ALERT -eq 1 ]] && [[ $total -gt 0 || $HAD_ERROR -eq 1 ]] && should_notify=1
+
+if [[ $should_notify -eq 1 ]]; then
     # Escape backslashes and double-quotes for AppleScript string interpolation.
     notify_body=${summary//\\/\\\\}
     notify_body=${notify_body//\"/\\\"}
-    osascript -e "display notification \"$notify_body\" with title \"chezmoi drift\"" >/dev/null 2>&1 || true
+
+    if [[ $ALERT -eq 1 ]]; then
+        # Clickable dialog with a "Fix now" button. Auto-dismisses after 90 seconds.
+        # The result includes "button returned:Fix now" when chosen; we launch iTerm
+        # and run chezmoi-fix in a fresh window. AppleScript escaping is the same
+        # as for display notification.
+        result=$(
+            osascript <<APPLESCRIPT 2>/dev/null
+try
+    tell application "System Events"
+        set theResp to display dialog "$notify_body" with title "chezmoi drift" buttons {"Dismiss", "Fix now"} default button "Fix now" giving up after 90 with icon caution
+    end tell
+    return button returned of theResp
+on error
+    return ""
+end try
+APPLESCRIPT
+        )
+        if [[ $result == "Fix now" ]]; then
+            # Open iTerm and run chezmoi-fix in a new window. Fall back to opening
+            # Terminal.app if iTerm isn't installed.
+            if osascript -e 'tell application "iTerm" to activate' >/dev/null 2>&1; then
+                osascript <<'APPLESCRIPT' >/dev/null 2>&1 || true
+tell application "iTerm"
+    activate
+    set newWindow to (create window with default profile)
+    tell current session of newWindow to write text "chezmoi-fix"
+end tell
+APPLESCRIPT
+            else
+                osascript <<'APPLESCRIPT' >/dev/null 2>&1 || true
+tell application "Terminal"
+    activate
+    do script "chezmoi-fix"
+end tell
+APPLESCRIPT
+            fi
+        fi
+    else
+        # Non-interactive notification (existing behaviour).
+        osascript -e "display notification \"$notify_body\" with title \"chezmoi drift\"" >/dev/null 2>&1 || true
+    fi
 fi
 
 if [[ $HAD_ERROR -eq 1 ]]; then
