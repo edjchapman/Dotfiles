@@ -20,6 +20,12 @@
 [gpg]
 	program = {{ lookPath "gpg" }}
 {{- end }}
+[alias]
+	sync = "!f() { \
+		git fetch --all --prune && \
+		git pull --ff-only --autostash && \
+		git branch --merged | grep -vE '^\\*|^\\s*(main|master)$' | xargs -r -n1 git branch -d; \
+	}; f"
 [credential "https://github.com"]
 	helper =
 	helper = !{{ if eq .chezmoi.arch "arm64" }}/opt/homebrew/bin/gh{{ else }}/usr/local/bin/gh{{ end }} auth git-credential
