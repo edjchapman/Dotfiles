@@ -18,20 +18,17 @@ If you are an agent landing in this repo, read this file before doing anything.
 
 ## Critical commands
 
-Use these in this order. The golden rule: **always preview before mutating**.
+The golden rule: **always preview before mutating**.
 
-| Command | When | Notes |
-|---|---|---|
-| `chezmoi diff` | Before any `apply` | Read-only. Shows exactly what would change in `$HOME`. |
-| `chezmoi execute-template <file>` | Validating a `.tmpl` change | Renders without applying. Use `--init --override-data` to test machine_type/arch combos. |
-| `chezmoi verify` | Detecting drift | Exits non-zero if `$HOME` differs from source. |
-| `chezmoi doctor` | Health check | Run when something feels wrong. |
-| `chezmoi apply` | Deploying changes | **Mutates `$HOME`.** Requires explicit user approval (gated by hook). Always run `chezmoi diff` first. |
-| `chezmoi re-add <path>` | Pulling `$HOME` changes back to source | Use when a file was edited in place outside chezmoi. |
-| `chezmoi add --encrypt <path>` | Adding a new secret | **Never use `chezmoi add` (without `--encrypt`) for secrets.** |
-| `make ci` | Before any commit/push | Runs lint, fmt-check, template matrix, audit, doctor. |
-| `make drift` (or `chezmoi-drift-check --full`) | Investigating a drift banner / notification | Read-only. Reports `home`, `brew-missing`, `brew-extra` counts and writes `~/.cache/chezmoi-drift/state`. |
-| `make fix` (or `chezmoi-fix`) | The drift banner says "run chezmoi-fix" | Interactive remediation menu. Dispatches to `chezmoi-brew-sync`, `chezmoi diff`, `chezmoi apply`, defaults / security audits. |
+| Command | When |
+|---|---|
+| `mac` | The shell banner (or the user) flagged drift — refresh the check, summarise what's pending, dispatch the right fix. |
+| `chezmoi diff` | Before any `apply`. Read-only. Shows exactly what would change in `$HOME`. |
+| `chezmoi apply` | Deploy reviewed changes. **Mutates `$HOME`.** Always run `chezmoi diff` first and surface it to the user before applying. |
+| `chezmoi add --encrypt <path>` | Add or rotate a secret. **Never use plain `chezmoi add` for secrets.** |
+| `make ci` | Before any commit/push. Lint, fmt-check, template matrix, audit, doctor. |
+
+`mac` is an alias for `chezmoi-fix` (defined in `dot_zshrc`). Other helpers (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi execute-template`, `chezmoi verify`, `chezmoi doctor`, `chezmoi re-add`) remain on PATH for specialised tasks; reach for them when `mac` doesn't fit.
 
 ## Dangerous operations — agents must NOT do these without explicit user approval
 
@@ -145,14 +142,9 @@ When you start working on files matching specific patterns, also load the releva
 
 ## Self-checking and self-updating
 
-- **On every save** (PostToolUse hooks): scripts get re-linted, templates get re-validated, markdown/yaml get re-checked.
-- **On every commit** (`.pre-commit-config.yaml`): shellcheck, shfmt, yamllint, markdownlint, gitleaks, ggshield, and a local `make verify-templates` hook.
-- **On every push** (`.github/workflows/ci.yml`): the same checks plus a 4-cell template matrix and a macOS `brew bundle check`.
-- **Weekly** (`.github/workflows/update-*.yml`): outdated brew packages and stale external pins (`oh-my-zsh`, `claude-code-config`) get a draft PR.
-- **Monthly** (`.github/workflows/audit.yml`): full-history secret scan.
-- **Per-shell + daily on the live machine** (`~/.local/bin/chezmoi-drift-check`): a shell banner surfaces drift on each new zsh, the launchd agent `com.user.chezmoi-drift` posts a daily macOS notification at 09:30. `make drift` runs the full check on demand. See [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md) for what each signal means.
-- **Brew-sync loop**: `brew()` / `mas()` wrappers in `dot_zshrc` record each `install`/`uninstall`/`reinstall`/`tap`/`untap`/`purchase` event into `~/.cache/chezmoi-brew-inbox/journal.ndjson` (via `~/.local/bin/chezmoi-brew-record`). A pending-events banner shows on shell startup, and the weekly launchd agent `com.user.chezmoi-brew-inbox` notifies if events accumulate. Run `chezmoi-brew-sync` interactively to dedupe and merge journal entries into `Brewfile.tmpl` under review. See [`docs/runbooks/brew-sync.md`](docs/runbooks/brew-sync.md).
-- **macOS defaults audit** (`~/.local/bin/chezmoi-defaults-audit`): parses every `defaults write` in `run_onchange_03-macos-defaults.sh`, reads live values, reports drift. The audit feeds into `chezmoi-drift-check` as `DEFAULTS_DRIFT`. `chezmoi-defaults-audit --apply` re-runs the source script to re-assert all values (useful after macOS upgrades reset settings).
-- **Security baseline audit** (`~/.local/bin/chezmoi-security-audit`): checks FileVault, SIP, firewall + stealth mode, SSH key passphrases, sensitive file perms (age key, AWS creds, SSH config), GPG signing key expiry (if `gpg_signing_key` configured), and pending `softwareupdate -l` (cached 24h). Feeds into `chezmoi-drift-check` as `SECURITY_DRIFT`. Read-only — surfaces findings with the recommended fix in each message, but never applies them.
+The user-facing summary is in [`README.md`](README.md) under "What runs automatically". Agent-relevant points:
 
-Every automated update lands as a **draft PR**. Nothing auto-merges. Nothing auto-applies to a live machine.
+- Every commit runs shellcheck, shfmt, yamllint, markdownlint, gitleaks, ggshield via `.pre-commit-config.yaml` + a local `make verify-templates` hook.
+- Every push runs the same checks plus a 4-cell template matrix and a macOS `brew bundle check` in CI (`.github/workflows/ci.yml`).
+- Weekly draft PRs from `update-brew.yml` and `update-externals.yml`; monthly full-history scan from `audit.yml`. **Nothing auto-merges. Nothing auto-applies.**
+- On the live machine: `mac` (= `chezmoi-fix`) is the user-facing remediation entry point. The full helper set (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi-brew-record`) remains on PATH for power use. The daily `brewup` background task (in `dot_zshrc`) appends to `~/.cache/brewup.log`. See [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md).

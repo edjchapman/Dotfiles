@@ -179,13 +179,39 @@ brewup() {
   print -P "\n%F{green}Done.%f\n"
 }
 
-# Auto-run brewup once per day when starting a shell
+# Auto-run brewup once per day on first shell. Output is appended to
+# ~/.cache/brewup.log (last ~2000 lines kept); `brewlog` tails it.
+# A directory-based lock prevents concurrent runs when multiple shells
+# open in quick succession. Stale locks (>1h) are cleared on next entry.
 BREWUP_STAMP="$HOME/.cache/brewup.last"
+BREWUP_LOG="$HOME/.cache/brewup.log"
+BREWUP_LOCK="$HOME/.cache/brewup.lock"
 mkdir -p "$HOME/.cache"
 
-if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/null)" ]]; then
-  (brewup && date +%F >| "$BREWUP_STAMP") &>/dev/null &!
+if [[ -d "$BREWUP_LOCK" ]]; then
+  _brewup_lock_mtime=$(stat -f %m "$BREWUP_LOCK" 2>/dev/null || echo 0)
+  (( $(date +%s) - _brewup_lock_mtime > 3600 )) && rmdir "$BREWUP_LOCK" 2>/dev/null
+  unset _brewup_lock_mtime
 fi
+
+if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/null)" ]]; then
+  (
+    if mkdir "$BREWUP_LOCK" 2>/dev/null; then
+      trap 'rmdir "$BREWUP_LOCK" 2>/dev/null' EXIT INT TERM HUP
+      {
+        echo "=== brewup $(date '+%Y-%m-%d %H:%M:%S') ==="
+        if brewup; then
+          date +%F >| "$BREWUP_STAMP"
+        fi
+      } >>"$BREWUP_LOG" 2>&1
+      tail -n 2000 "$BREWUP_LOG" >"$BREWUP_LOG.tmp" 2>/dev/null && mv "$BREWUP_LOG.tmp" "$BREWUP_LOG"
+    fi
+  ) &!
+fi
+
+# Short aliases for the management surface (see CLAUDE.md / README).
+alias mac='chezmoi-fix'
+alias brewlog='tail -F ~/.cache/brewup.log'
 
 # chezmoi drift banner — surfaces $HOME and Brewfile drift on shell start.
 # Cached state is read synchronously (cheap). A TTL-bounded refresh is kicked
@@ -195,13 +221,19 @@ fi
 # and the daily launchd notification still fires.
 if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
   _drift_state="$HOME/.cache/chezmoi-drift/state"
+  _showed_banner=0
   if [[ -f "$_drift_state" ]]; then
     # shellcheck disable=SC1090
     source "$_drift_state" 2>/dev/null
-    if (( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} > 0 )); then
-      print -P "%F{yellow}${summary:-chezmoi: drift detected}%f"
+    _drift_total=$(( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} ))
+    if (( _drift_total > 0 )); then
+      print -P "%F{yellow}chezmoi: ${_drift_total} thing(s) need attention — run 'mac'%f"
+      _showed_banner=1
+    elif [[ "${HAD_ERROR:-0}" == "1" ]]; then
+      print -P "%F{yellow}chezmoi: drift check encountered an error — run 'mac'%f"
+      _showed_banner=1
     fi
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT CHECKED_AT summary
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary _drift_total
   fi
   unset _drift_state
   (chezmoi-drift-check --brief --quiet) &>/dev/null &!
@@ -214,10 +246,18 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
     _n=$(wc -l <"$_inbox" | tr -d ' ')
     _color=yellow
     (( _n >= 10 )) && _color=red
-    print -P "%F{$_color}chezmoi: $_n brew event(s) pending — run chezmoi-brew-sync%f"
+    print -P "%F{$_color}chezmoi: $_n brew event(s) pending — run 'mac'%f"
     unset _n _color
+    _showed_banner=1
   fi
   unset _inbox
+
+  # Quiet shortcuts tip when nothing else fired. Avoids competing with a
+  # real banner; uses dim grey (%F{8}) so it never dominates the prompt.
+  if (( _showed_banner == 0 )); then
+    print -P "%F{8}tip: 'mac' for chezmoi state · 'brewlog' for today's brew output%f"
+  fi
+  unset _showed_banner
 fi
 
 # brew/mas wrappers — record each mutating invocation to the inbox journal and

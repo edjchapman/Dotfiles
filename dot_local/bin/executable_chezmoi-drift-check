@@ -207,7 +207,7 @@ if [[ $HAD_ERROR -eq 1 ]]; then
 elif [[ -z $parts ]]; then
     summary="drift: clean"
 else
-    summary="drift: $parts · run chezmoi-fix to resolve"
+    summary="drift: $parts · run 'mac' to resolve"
 fi
 
 # Atomic state-file write: tmp+mv so a concurrent reader never sees a partial file.
