@@ -14,10 +14,16 @@ setup() {
     mkdir -p "$XDG_CACHE_HOME/chezmoi-drift"
     export CHEZMOI_FIX_TEST_MODE=1
 
-    # Ensure subordinate audit tools are NOT on PATH for these tests — we only
-    # want to exercise the menu logic, not invoke real macOS audits.
+    # The menu code gates the defaults/security entries on `command -v` finding
+    # the respective audit binary. Tests check menu rendering, not the audits
+    # themselves, so we stub both with no-op exit-0 shims and put a tempdir
+    # first on PATH. Individual tests can override or delete the stubs.
     export PATH="$TMPHOME/bin:/usr/bin:/bin"
     mkdir -p "$TMPHOME/bin"
+    for tool in chezmoi-defaults-audit chezmoi-security-audit; do
+        printf '#!/bin/sh\nexit 0\n' >"$TMPHOME/bin/$tool"
+        chmod +x "$TMPHOME/bin/$tool"
+    done
 }
 
 teardown() {
@@ -102,31 +108,17 @@ EOF
     [[ "$output" != *"no known drift"* ]]
 }
 
-@test "audit-clean entries appear when nothing is drifting" {
-    # Stub the audit tools so the menu paths that depend on them activate.
-    cat >"$TMPHOME/bin/chezmoi-defaults-audit" <<'STUB'
-#!/bin/sh
-exit 0
-STUB
-    cat >"$TMPHOME/bin/chezmoi-security-audit" <<'STUB'
-#!/bin/sh
-exit 0
-STUB
-    chmod +x "$TMPHOME/bin/chezmoi-defaults-audit" "$TMPHOME/bin/chezmoi-security-audit"
-    # Inbox journal empty, no drift — but error flag forces the menu open.
+@test "audit-clean entries stay hidden even when only HAD_ERROR is set" {
+    # has_action = HAD_ERROR + inbox + drift = 1, so the hygiene rule should
+    # suppress the "no known drift" entries — the user came to fix something,
+    # not to browse audits.
     write_state error=1 summary='drift: ERROR: stubbed'
     run "$FIX"
     [ "$status" -eq 0 ]
-    # has_action > 0 (HAD_ERROR=1), so the "no known drift" entries should be hidden.
     [[ "$output" != *"no known drift"* ]]
 }
 
 @test "menu arrow column is self-aligning" {
-    cat >"$TMPHOME/bin/chezmoi-security-audit" <<'STUB'
-#!/bin/sh
-exit 0
-STUB
-    chmod +x "$TMPHOME/bin/chezmoi-security-audit"
     write_state security=12 summary='drift: security: 12'
     run "$FIX"
     [ "$status" -eq 0 ]
