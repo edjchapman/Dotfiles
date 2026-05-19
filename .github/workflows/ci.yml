@@ -87,6 +87,16 @@ jobs:
                   npm install -g markdownlint-cli2
             - uses: pre-commit/action@v3.0.1
 
+    bats:
+        name: bats unit tests
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - name: Install bats-core
+              run: sudo apt-get update && sudo apt-get install -y bats
+            - name: Run bats
+              run: make test-bats
+
     validate-templates:
         name: chezmoi templates (${{ matrix.machine_type }} / ${{ matrix.arch }})
         runs-on: ubuntu-latest

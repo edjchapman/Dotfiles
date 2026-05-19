@@ -25,3 +25,6 @@ Brewfile.tmpl
 
 # Documentation
 docs
+
+# bats-core unit tests (run by make test-bats / CI; not deployed to $HOME)
+tests
