@@ -15,20 +15,54 @@ die() {
     exit 1
 }
 
-command -v chezmoi >/dev/null 2>&1 || die "chezmoi not installed"
+# plural <n> <singular> [<plural>] — defaults plural form to <singular>+s.
+plural() {
+    local n=$1 s=$2 p=${3:-${2}s}
+    if ((n == 1)); then printf '%s' "$s"; else printf '%s' "$p"; fi
+}
+
+# Test hook: when set, skip the runtime prerequisites (chezmoi, TTY, drift-check
+# refresh) and exit after rendering the menu. Lets bats-core exercise menu
+# logic against synthetic state files without a real chezmoi install.
+TEST_MODE=${CHEZMOI_FIX_TEST_MODE:-0}
+
+if ((TEST_MODE == 0)); then
+    command -v chezmoi >/dev/null 2>&1 || die "chezmoi not installed"
+fi
 
 TTY=/dev/tty
-[[ -r $TTY && -w $TTY ]] || die "no tty available; chezmoi-fix is interactive"
+if ((TEST_MODE == 0)); then
+    [[ -r $TTY && -w $TTY ]] || die "no tty available; chezmoi-fix is interactive"
+fi
 
 DRIFT_STATE="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-drift/state"
 INBOX_JOURNAL="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson"
 
+# Read the cached counts that the banner saw before we refresh and overwrite
+# them. We use this to detect when something resolved between the banner and
+# the menu — without this the user sees "banner said 2, menu shows 1" with no
+# explanation. Inbox isn't part of the banner's drift total (it has its own
+# banner line) so we exclude it from the comparison below.
+cached_drift_total=0
+if [[ -f $DRIFT_STATE ]]; then
+    HOME_DRIFT=0
+    BREW_MISSING=0
+    BREW_EXTRA=0
+    DEFAULTS_DRIFT=0
+    SECURITY_DRIFT=0
+    # shellcheck disable=SC1090
+    source "$DRIFT_STATE" 2>/dev/null || true
+    cached_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
+fi
+
 # Refresh drift counts up-front (quiet — we render our own summary). If the
 # refresh fails (e.g. broken Brewfile.tmpl), fall through to whatever cached
 # state is on disk; the menu will still surface the brew-inbox option.
-echo "==> Refreshing drift signals…"
-if command -v chezmoi-drift-check >/dev/null 2>&1; then
-    chezmoi-drift-check --full --quiet >/dev/null 2>&1 || true
+if ((TEST_MODE == 0)); then
+    echo "==> Refreshing drift signals…"
+    if command -v chezmoi-drift-check >/dev/null 2>&1; then
+        chezmoi-drift-check --full --quiet >/dev/null 2>&1 || true
+    fi
 fi
 
 HOME_DRIFT=0
@@ -42,6 +76,7 @@ if [[ -f $DRIFT_STATE ]]; then
     # shellcheck disable=SC1090
     source "$DRIFT_STATE" 2>/dev/null || true
 fi
+fresh_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
 
 inbox_count=0
 [[ -s $INBOX_JOURNAL ]] && inbox_count=$(wc -l <"$INBOX_JOURNAL" | tr -d ' ')
@@ -58,55 +93,72 @@ elif ((total == 0)); then
     exit 0
 else
     echo "   ${summary:-drift detected}"
-    ((inbox_count > 0)) && echo "   brew inbox: ${inbox_count} event(s) pending"
+    ((inbox_count > 0)) && echo "   brew inbox: ${inbox_count} $(plural "$inbox_count" event) pending"
+    if ((cached_drift_total > 0 && cached_drift_total != fresh_drift_total)); then
+        echo "   (refreshed: banner showed ${cached_drift_total}, now ${fresh_drift_total})"
+    fi
 fi
 echo
 
-# Build menu entries. Each entry is "<id>|<label>". Options appear only when
-# their preconditions are met, so the menu never offers a no-op.
+# Build menu entries. Each entry is three pipe-separated fields:
+#   <id>|<description>|<command>
+# Options appear only when their preconditions are met, so the menu never
+# offers a no-op. When something is actionable (drift, inbox events, or a
+# drift-check error), the "audit a clean baseline" entries are suppressed —
+# they belong to a reconnaissance surface, not a remediation one.
 OPTS=()
+has_action=$((fresh_drift_total + inbox_count + ${HAD_ERROR:-0}))
 
 ((inbox_count > 0)) \
-    && OPTS+=("brew-sync|Merge ${inbox_count} brew event(s) into Brewfile.tmpl  →  chezmoi-brew-sync")
+    && OPTS+=("brew-sync|Merge ${inbox_count} brew $(plural "$inbox_count" event) into Brewfile.tmpl|chezmoi-brew-sync")
 
 ((${HOME_DRIFT:-0} > 0)) \
-    && OPTS+=("diff|Preview ${HOME_DRIFT} home-file change(s)            →  chezmoi diff")
+    && OPTS+=("diff|Preview ${HOME_DRIFT} home-file $(plural "$HOME_DRIFT" change)|chezmoi diff")
 
 if ((${HOME_DRIFT:-0} > 0 || ${BREW_MISSING:-0} > 0)); then
-    OPTS+=("apply|Apply pending changes                         →  chezmoi diff, then chezmoi apply")
+    OPTS+=("apply|Apply pending changes|chezmoi diff, then chezmoi apply")
 fi
 
 ((${BREW_EXTRA:-0} > 0)) \
-    && OPTS+=("brew-extra|Investigate ${BREW_EXTRA} brew-extra package(s)        →  brew bundle cleanup --dry-run")
+    && OPTS+=("brew-extra|Investigate ${BREW_EXTRA} brew-extra $(plural "$BREW_EXTRA" package)|brew bundle cleanup --dry-run")
 
-# Phase 3 / Phase 4 scripts are picked up automatically once they land.
 if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
     if ((${DEFAULTS_DRIFT:-0} > 0)); then
-        OPTS+=("defaults|Inspect ${DEFAULTS_DRIFT} macOS defaults drift            →  chezmoi-defaults-audit --drift")
-        OPTS+=("defaults-apply|Re-assert macOS defaults                       →  chezmoi-defaults-audit --apply")
-    else
-        OPTS+=("defaults|Audit macOS defaults (no known drift)         →  chezmoi-defaults-audit")
+        OPTS+=("defaults|Inspect ${DEFAULTS_DRIFT} macOS defaults drift|chezmoi-defaults-audit --drift")
+        OPTS+=("defaults-apply|Re-assert macOS defaults|chezmoi-defaults-audit --apply")
+    elif ((has_action == 0)); then
+        OPTS+=("defaults|Audit macOS defaults (no known drift)|chezmoi-defaults-audit")
     fi
 fi
 if command -v chezmoi-security-audit >/dev/null 2>&1; then
     if ((${SECURITY_DRIFT:-0} > 0)); then
-        OPTS+=("security|Inspect ${SECURITY_DRIFT} security baseline failure(s)   →  chezmoi-security-audit --drift")
-    else
-        OPTS+=("security|Security baseline check (no known drift)       →  chezmoi-security-audit")
+        OPTS+=("security|Inspect ${SECURITY_DRIFT} security baseline $(plural "$SECURITY_DRIFT" failure)|chezmoi-security-audit --drift")
+    elif ((has_action == 0)); then
+        OPTS+=("security|Security baseline check (no known drift)|chezmoi-security-audit")
     fi
 fi
 
 # Always available.
-OPTS+=("doctor|Run chezmoi doctor (health diagnostic)         →  chezmoi doctor")
-OPTS+=("dismiss|Silence drift banner for this shell session     →  export CHEZMOI_DRIFT_QUIET=1")
+OPTS+=("doctor|Run chezmoi doctor (health diagnostic)|chezmoi doctor")
+OPTS+=("dismiss|Silence drift banner for this shell session|export CHEZMOI_DRIFT_QUIET=1")
+
+# Compute description column width once so the arrow column is self-aligning
+# regardless of which options appear or what counts each label embeds.
+desc_width=0
+for entry in "${OPTS[@]}"; do
+    IFS='|' read -r _ desc _ <<<"$entry"
+    ((${#desc} > desc_width)) && desc_width=${#desc}
+done
 
 echo "What would you like to do?"
 for i in "${!OPTS[@]}"; do
-    label=${OPTS[i]#*|}
-    printf "  %d) %s\n" $((i + 1)) "$label"
+    IFS='|' read -r _ desc cmd <<<"${OPTS[i]}"
+    printf "  %d) %-*s  →  %s\n" $((i + 1)) "$desc_width" "$desc" "$cmd"
 done
 echo "  q) Quit"
 echo
+
+((TEST_MODE > 0)) && exit 0
 
 read -r -p "Choice [q]: " reply <"$TTY"
 reply=${reply:-q}
