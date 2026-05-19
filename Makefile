@@ -1,4 +1,4 @@
-.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test ci diff apply doctor drift fix pre-commit-install
+.PHONY: help lint fmt fmt-check verify-templates verify-templates-quick audit test test-bats ci diff apply doctor drift fix pre-commit-install
 
 # Machine_type x arch matrix used by verify-templates.
 MACHINE_TYPES := personal work
@@ -80,7 +80,7 @@ pre-commit-install: ## Install pre-commit framework hooks for this repo
 	@pre-commit install --install-hooks
 	@echo "Pre-commit hooks installed."
 
-test: lint ## Run lint + chezmoi doctor + chezmoi verify
+test: lint test-bats ## Run lint + bats unit tests + chezmoi doctor + chezmoi verify
 	@echo ""
 	@echo "Running chezmoi doctor..."
 	@chezmoi doctor
@@ -88,7 +88,12 @@ test: lint ## Run lint + chezmoi doctor + chezmoi verify
 	@echo "Running chezmoi verify..."
 	@chezmoi verify && echo "All targets match source." || echo "Drift detected -- run 'chezmoi diff' for details."
 
-ci: lint fmt-check verify-templates audit ## Umbrella target: everything CI runs (no apply/network)
+test-bats: ## Run bats-core unit tests under tests/ (no chezmoi/brew required)
+	@command -v bats >/dev/null 2>&1 || { echo "bats not installed: brew install bats-core"; exit 1; }
+	@echo "Running bats..."
+	@bats tests/
+
+ci: lint fmt-check verify-templates test-bats audit ## Umbrella target: everything CI runs (no apply/network)
 	@echo ""
 	@echo "All CI checks passed."
 
