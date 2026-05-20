@@ -74,23 +74,45 @@ case "$SUBCMD" in
     *) exit 0 ;;
 esac
 
-# Determine the Brewfile entry kind. mas wins over brew/cask; tap is its own
-# kind; --cask flips brew → cask; --formula/-formulae forces brew back.
-KIND=brew
-[[ $TOOL == mas ]] && KIND=mas
-[[ $SUBCMD == tap || $SUBCMD == untap ]] && KIND=tap
+# Determine the Brewfile entry kind. mas/tap are unambiguous; for brew the
+# kind depends on whether the user passed --cask/--formula. If neither was
+# given we leave BASE_KIND empty and detect per-name below via `brew info`,
+# because bare `brew install <name>` silently auto-resolves to cask or formula
+# and recording the wrong kind corrupts Brewfile.tmpl (see anki regression).
+BASE_KIND=""
+[[ $TOOL == mas ]] && BASE_KIND=mas
+[[ $SUBCMD == tap || $SUBCMD == untap ]] && BASE_KIND=tap
 
 ARG_TOKENS=()
 NAMES=()
 for arg in "${ARGV[@]:1}"; do
     case "$arg" in
-        --cask | --casks) KIND=cask ;;
-        --formula | --formulae) [[ $KIND == cask ]] && KIND=brew ;;
+        --cask | --casks) [[ -z $BASE_KIND ]] && BASE_KIND=cask ;;
+        --formula | --formulae) [[ -z $BASE_KIND || $BASE_KIND == cask ]] && BASE_KIND=brew ;;
         --HEAD) ARG_TOKENS+=("HEAD") ;;
         -*) ;; # ignore other flags
         *) NAMES+=("$arg") ;;
     esac
 done
+
+# Per-name detector: only consulted when BASE_KIND is empty (bare brew
+# install/uninstall/reinstall with no kind flag). Falls back to "brew" on any
+# error — matches the historical default and keeps the recorder lossy-safe.
+detect_kind() {
+    local name=$1 result
+    command -v brew >/dev/null 2>&1 || {
+        echo brew
+        return
+    }
+    result=$(brew info --json=v2 -- "$name" 2>/dev/null \
+        | jq -r 'if (.casks | length) > 0 then "cask"
+               elif (.formulae | length) > 0 then "brew"
+               else "" end' 2>/dev/null)
+    case "$result" in
+        cask | brew) echo "$result" ;;
+        *) echo brew ;;
+    esac
+}
 
 ((${#NAMES[@]})) || exit 0
 
@@ -114,13 +136,18 @@ done
 args_json+="]"
 
 for name in "${NAMES[@]}"; do
+    if [[ -n $BASE_KIND ]]; then
+        kind=$BASE_KIND
+    else
+        kind=$(detect_kind "$name")
+    fi
     esc=${name//\\/\\\\}
     esc=${esc//\"/\\\"}
     # printf '%s\n' guarantees a single line + LF. >> with O_APPEND is
     # short-write atomic on local filesystems; no lock needed for concurrent
     # appenders.
     printf '{"ts":%d,"op":"%s","kind":"%s","name":"%s","args":%s,"rc":%d}\n' \
-        "$ts" "$OP" "$KIND" "$esc" "$args_json" "$RC" >>"$JOURNAL" 2>/dev/null || exit 0
+        "$ts" "$OP" "$kind" "$esc" "$args_json" "$RC" >>"$JOURNAL" 2>/dev/null || exit 0
 done
 
 exit 0

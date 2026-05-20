@@ -95,6 +95,9 @@ cask "obsidian"
 cask "slack"
 
 # Desktop Apps — Utilities
+{{ if eq .machine_type "personal" -}}
+cask "anki"
+{{ end -}}
 cask "bluesnooze"
 cask "font-iosevka"
 
