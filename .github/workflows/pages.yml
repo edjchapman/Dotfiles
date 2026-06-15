@@ -6,6 +6,7 @@ on:
         branches: [main]
         paths:
             - docs/**
+            - mkdocs.yml
             - .github/workflows/pages.yml
     workflow_dispatch:
 
@@ -39,8 +40,7 @@ jobs:
                   pip install -r docs/requirements.txt
 
             - name: Build site
-              working-directory: docs
-              run: mkdocs build --site-dir ../site
+              run: mkdocs build
 
             - uses: actions/configure-pages@v6
 
