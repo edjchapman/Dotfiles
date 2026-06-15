@@ -76,7 +76,9 @@ chezmoi verify
 
 ### 6. Distribute the new key
 
-Transfer `~/.config/chezmoi/key.txt` to every machine that needs it (AirDrop, USB, password manager). After every machine has the new key, securely delete the old one (`shred -u ~/.config/chezmoi/key.txt.old` — and from any backups).
+Transfer `~/.config/chezmoi/key.txt` to every machine that needs it (AirDrop, USB, password manager). See [Back up the age key](#back-up-the-age-key) below for the canonical backup procedure.
+
+After every machine has the new key, delete the old one: `rm ~/.config/chezmoi/key.txt.old`. On macOS APFS, plain `rm` is genuinely unrecoverable — TRIM on the SSD does what `shred` used to do on spinning disks. Also delete any copies of the old key from your password manager / backups.
 
 ### 7. Commit
 
@@ -86,3 +88,43 @@ git commit -m "chore(secrets): rotate age recipient key"
 ```
 
 The old recipient is now public history — that's fine. Only the new private key matters for decryption.
+
+## Back up the age key
+
+The age private key at `~/.config/chezmoi/key.txt` is a one-of-one failure mode: if it's only on this Mac and the disk dies, you lose decryption access to every `*.age` blob in the repo. The underlying secrets (AWS keys, PATs) are mostly *re-issuable* upstream, but bootstrap day is annoying. Back the key up after first-time generation, and again after every rotation.
+
+### What to back up
+
+The complete contents of `~/.config/chezmoi/key.txt` — all three lines (`# created: …`, `# public key: …`, `AGE-SECRET-KEY-1…`). Save the public recipient string alongside (it's the `# public key:` line and matches what's in `.chezmoi.toml.tmpl`). The recipient is public-by-design but having it next to the private key makes recovery verification cheap.
+
+### Strategies (pick one — multiple is better)
+
+1. **Password manager (recommended)** — 1Password / Dashlane / Bitwarden / iCloud Keychain all support free-form secure notes. Create one titled `chezmoi age private key (Mac primary)`, paste in the file contents, tag it `infrastructure`. Trust boundary: your password-manager master credential.
+2. **Passphrase-encrypted blob in any cloud** — `age -p ~/.config/chezmoi/key.txt > ~/iCloud\ Drive/chezmoi-key.txt.age` prompts for a passphrase; the resulting blob is decryptable only with that passphrase, so the cloud provider sees only ciphertext. Two-factor: cloud account + passphrase. Higher friction than a password manager; smaller single-point-of-failure surface.
+3. **Hardware USB stored physically** — copy `key.txt` to an encrypted USB stick (e.g. APFS-encrypted), put it somewhere durable. No online dependency. Friction: needs physical access on recovery.
+4. **Paper print** — the key file is under 200 bytes; one printed page in a fireproof safe is a real, audit-friendly fallback. Combines well with a hardware token guarding the password manager.
+
+### Recovery on a new (or wiped) Mac
+
+```bash
+mkdir -p ~/.config/chezmoi
+chmod 700 ~/.config/chezmoi
+$EDITOR ~/.config/chezmoi/key.txt          # paste contents from your backup
+chmod 600 ~/.config/chezmoi/key.txt
+
+# Sanity check: derive the public key from the file and compare to the
+# recipient in .chezmoi.toml.tmpl. They must match.
+age-keygen -y ~/.config/chezmoi/key.txt
+
+# Bootstrap chezmoi against the public repo and apply.
+chezmoi init --apply edjchapman/dotfiles
+```
+
+If `age-keygen -y` outputs a recipient that doesn't match the one in `.chezmoi.toml.tmpl`, you've restored an old key from before the last rotation. Pull the current key from backup instead — chezmoi will report `age: no identity matched any of the recipients` if you proceed with a mismatched key.
+
+### What NOT to back up the key to
+
+- The dotfiles git repo itself (in any form, encrypted or not) — circular dependency: you'd need the key to decrypt the key.
+- Any sync target that also mirrors `~/.config/chezmoi/` to a shared cloud account someone else can access (e.g. a family iCloud, a work Google Drive that admins can subpoena).
+- A non-encrypted USB stick.
+- Email or chat with cleartext attachments.
