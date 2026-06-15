@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="edjchapman/dotfiles — bare metal to fully configured Mac in one command">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#58a6ff"/>
+      <stop offset="1" stop-color="#a371f7"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1280" height="4" fill="url(#accent)"/>
+  <rect x="0" y="636" width="1280" height="4" fill="url(#accent)"/>
+
+  <g transform="translate(96, 120)">
+    <rect width="120" height="120" rx="24" fill="url(#accent)"/>
+    <text x="60" y="86" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="80" font-weight="700" fill="#0d1117" text-anchor="middle">~</text>
+  </g>
+
+  <text x="256" y="200" font-family="-apple-system, system-ui, 'Segoe UI', Roboto, sans-serif" font-size="80" font-weight="800" fill="#f0f6fc" letter-spacing="-2">dotfiles</text>
+  <text x="256" y="240" font-family="-apple-system, system-ui, sans-serif" font-size="22" font-weight="500" fill="#8b949e">edjchapman/dotfiles · MIT</text>
+
+  <text x="96" y="340" font-family="-apple-system, system-ui, sans-serif" font-size="36" font-weight="600" fill="#f0f6fc">Bare metal to fully configured Mac</text>
+  <text x="96" y="388" font-family="-apple-system, system-ui, sans-serif" font-size="36" font-weight="400" fill="#8b949e">in one command.</text>
+
+  <g font-family="-apple-system, system-ui, sans-serif" font-size="18" font-weight="600">
+    <text x="96" y="460" fill="#c9d1d9">matrix-tested templates</text>
+    <text x="372" y="460" fill="#8b949e">·</text>
+    <text x="392" y="460" fill="#c9d1d9">age-encrypted secrets</text>
+    <text x="652" y="460" fill="#8b949e">·</text>
+    <text x="672" y="460" fill="#c9d1d9">drift detection</text>
+
+    <text x="96" y="496" fill="#c9d1d9">weekly self-update PRs</text>
+    <text x="356" y="496" fill="#8b949e">·</text>
+    <text x="376" y="496" fill="#c9d1d9">first-class Claude Code integration</text>
+  </g>
+
+  <text x="96" y="588" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="18" font-weight="500" fill="#58a6ff">github.com/edjchapman/dotfiles</text>
+  <text x="1184" y="588" font-family="-apple-system, system-ui, sans-serif" font-size="14" font-weight="500" fill="#6e7681" text-anchor="end">managed with chezmoi</text>
+</svg>

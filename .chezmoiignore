@@ -30,6 +30,10 @@ Brewfile.tmpl
 # Documentation
 docs
 
+# Branding, demo, and architecture assets used by the README and Pages site —
+# committed for review and serving, but never deployed to $HOME.
+assets
+
 # bats-core unit tests (run by make test-bats / CI; not deployed to $HOME)
 tests
 
