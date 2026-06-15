@@ -28,3 +28,6 @@ docs
 
 # bats-core unit tests (run by make test-bats / CI; not deployed to $HOME)
 tests
+
+# Runtime cache populated by oh-my-zsh on shell startup — not dotfile state.
+.oh-my-zsh/cache/**
