@@ -21,8 +21,14 @@
 	program = {{ lookPath "gpg" }}
 {{- end }}
 [alias]
+	# Squash-merge-aware sync. After a squash-merge the original branch
+	# isn't an ancestor of main, so `--merged` doesn't catch it; the
+	# `[gone]`-upstream prune (step 2) handles those. The awk filter
+	# skips the currently-checked-out branch ($1 == "*") so the pipeline
+	# can't try to delete the current HEAD.
 	sync = "!f() { \
 		git fetch --all --prune && \
+		git branch -vv | awk '/: gone]/ && $1 != \"*\" {print $1}' | xargs -r -n1 git branch -D; \
 		git pull --ff-only --autostash && \
 		git branch --merged | grep -vE '^\\*|^\\s*(main|master)$' | xargs -r -n1 git branch -d; \
 	}; f"
