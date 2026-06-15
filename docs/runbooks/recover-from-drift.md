@@ -112,7 +112,7 @@ Note that `update-externals.yml` only PRs the `oh-my-zsh` SHA. `claude-code-conf
 
 ## When a self-update workflow runs but no PR appears
 
-The weekly workflows (`update-brew.yml`, `update-externals.yml`, `update-vscode.yml`, `update-mas.yml`) only open a draft PR when they actually find something to update. A successful run with no PR can mean either:
+The weekly workflows (`update-externals.yml`, `update-vscode.yml`, `update-mas.yml`) only open a draft PR when they actually find something to update. A successful run with no PR can mean either:
 
 - **Nothing to update** — the common case; the green check is genuine.
 - **Silent degradation** — the upstream API was unreachable or rate-limited, the workflow checked nothing, and still exited successfully.
@@ -120,11 +120,11 @@ The weekly workflows (`update-brew.yml`, `update-externals.yml`, `update-vscode.
 To distinguish:
 
 ```bash
-gh run list --workflow=update-brew.yml --limit=5
+gh run list --workflow=update-externals.yml --limit=5
 gh run view <run-id> --log | grep -iE 'unauthorized|timeout|rate-limited|fail|error'
 ```
 
-If the log shows API errors, re-run via `gh workflow run update-brew.yml` (or the Actions UI). If the log is clean and you still expected updates, sanity-check the upstream directly (`brew outdated`, the VS Code Marketplace, the iTunes App Store API) — the workflow's "nothing to do" may just be accurate.
+If the log shows API errors, re-run via `gh workflow run update-externals.yml` (or the Actions UI). If the log is clean and you still expected updates, sanity-check the upstream directly (the GitHub commits API for `oh-my-zsh`, the VS Code Marketplace, the iTunes App Store API) — the workflow's "nothing to do" may just be accurate.
 
 ## Last resort
 

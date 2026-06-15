@@ -22,7 +22,7 @@ Reproducible, privacy-hardened macOS configuration managed with [chezmoi](https:
 | **Homebrew upgrades** (`brew upgrade && brew doctor && brew cleanup`) | Once per day, on first shell of the day | `brewlog` (or `tail ~/.cache/brewup.log`) |
 | Drift detection | Every new shell + 09:30 daily notification | Shell banner; `mac` to act |
 | Brew install tracking | Every interactive `brew install/uninstall/...` | Shell banner shows pending count; `mac` merges into `Brewfile.tmpl` |
-| Weekly draft PRs for outdated formulae and stale external pins | Mondays | GitHub Actions: `update-brew`, `update-externals` |
+| Weekly draft PR for stale external pins | Mondays | GitHub Actions: `update-externals` |
 | Monthly full-history secret scan | First of the month | GitHub Actions: `audit` |
 
 Nothing auto-merges. Nothing auto-applies to `$HOME`. Updates land as draft PRs for you to review.
