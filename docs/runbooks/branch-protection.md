@@ -3,7 +3,7 @@
 The `main` branch is protected so that:
 
 - **Direct pushes are blocked.** All changes go via PR.
-- **All 11 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, and `brew bundle check (macOS)`.
+- **All 12 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, `plist XML validation`, and `brew bundle check (macOS)`.
 - **Branches must be up to date with `main`** before merging (`strict: true`). This forces CI to re-run on the merge candidate, not the stale branch state.
 - **Linear history.** No merge commits — only squash merges.
 - **Conversation resolution required.** Inline review threads must be resolved before merge.
@@ -44,6 +44,7 @@ gh api -X PUT repos/edjchapman/dotfiles/branches/main/protection --input - <<'JS
       "chezmoi templates (personal / arm64)",
       "chezmoi templates (work / amd64)",
       "chezmoi templates (work / arm64)",
+      "plist XML validation",
       "brew bundle check (macOS)"
     ]
   },
