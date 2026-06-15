@@ -1,0 +1,31 @@
+title: "[show-and-tell]: "
+labels: ["show and tell"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Share something you built on top of (or inspired by) this repo: a fork, a new helper, a runbook for your own situation, a screenshot of your shell banner. Show-and-tell is the place for "I tried X and it worked" — no questions or asks required.
+
+    - type: textarea
+      id: what
+      attributes:
+          label: What did you build?
+          description: A few sentences. Screenshots welcome.
+      validations:
+          required: true
+
+    - type: textarea
+      id: link
+      attributes:
+          label: Link (optional)
+          description: Fork URL, gist, blog post, anything.
+      validations:
+          required: false
+
+    - type: textarea
+      id: takeaways
+      attributes:
+          label: What did you learn?
+          description: Anything that would help others copying your approach?
+      validations:
+          required: false
