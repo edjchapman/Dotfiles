@@ -311,3 +311,18 @@ mas() {
   esac
   return $rc
 }
+
+# chezmoi apply wrapper — kick off an async drift refresh after each apply so
+# the banner reflects post-apply state rather than the stale pre-apply cache
+# (which otherwise lingers until the TTL window expires, default 4h).
+chezmoi() {
+  command chezmoi "$@"
+  local rc=$? subcmd="${1:-}"
+  case "$subcmd" in
+    apply)
+      command -v chezmoi-drift-check &>/dev/null && \
+        (chezmoi-drift-check --full --quiet) &>/dev/null &!
+      ;;
+  esac
+  return $rc
+}
