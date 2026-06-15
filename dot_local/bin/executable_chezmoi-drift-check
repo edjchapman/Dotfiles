@@ -127,7 +127,11 @@ err_parts=""
 # yields HOME_DRIFT=0, which is the textbook silent-failure pattern this whole
 # feature is meant to prevent.
 if status_out=$(chezmoi status --exclude=externals 2>&1); then
-    HOME_DRIFT=$(printf '%s\n' "$status_out" | sed '/^$/d' | wc -l | tr -d ' ')
+    # Count only lines matching chezmoi status's `XY filename` format
+    # (X,Y ∈ space|A|D|M|R). Without this guard, stderr lines captured by
+    # 2>&1 — e.g. "chezmoi: warning: config file template has changed" —
+    # would each count as a drifted file, falsely inflating HOME_DRIFT.
+    HOME_DRIFT=$(printf '%s\n' "$status_out" | grep -cE '^[ ADMR][ ADMR] ' || true)
     HOME_DRIFT=${HOME_DRIFT:-0}
 else
     HAD_ERROR=1
