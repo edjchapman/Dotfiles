@@ -1,0 +1,35 @@
+title: "[q&a]: "
+labels: ["q&a"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Ask a question. Before asking, please check:
+
+              - The [README](https://github.com/edjchapman/dotfiles/blob/main/README.md) and [FAQ](https://github.com/edjchapman/dotfiles/blob/main/docs/faq.md).
+              - The [runbooks](https://github.com/edjchapman/dotfiles/tree/main/docs/runbooks) (new machine, secret rotation, drift recovery, brew sync, branch protection).
+              - The [architecture decisions](https://github.com/edjchapman/dotfiles/tree/main/docs/decisions).
+              - Upstream [chezmoi documentation](https://www.chezmoi.io/) for any chezmoi-mechanic question.
+
+    - type: textarea
+      id: question
+      attributes:
+          label: What do you want to know?
+      validations:
+          required: true
+
+    - type: textarea
+      id: tried
+      attributes:
+          label: What have you already tried?
+          description: Commands run, docs read, things that didn't work.
+      validations:
+          required: false
+
+    - type: textarea
+      id: env
+      attributes:
+          label: Environment (if relevant)
+          description: chezmoi version, machine_type, arch, anything weird about your setup.
+      validations:
+          required: false

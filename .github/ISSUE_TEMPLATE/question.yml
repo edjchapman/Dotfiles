@@ -1,0 +1,31 @@
+name: Question (rare path — prefer Discussions)
+description: A specific, narrow question that doesn't fit Discussions. Most questions belong in Discussions.
+title: "[question]: <short description>"
+labels: ["question"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              **Most questions belong in [Discussions](https://github.com/edjchapman/dotfiles/discussions)**, not issues. Issues are for concrete bugs or asks. Use this template only when:
+
+              - The question is narrow and one-shot.
+              - The answer will produce a documentation fix.
+              - You've already checked the [runbooks](https://github.com/edjchapman/dotfiles/tree/main/docs/runbooks) and [decisions](https://github.com/edjchapman/dotfiles/tree/main/docs/decisions).
+
+              Otherwise, please close this and open a discussion instead.
+
+    - type: textarea
+      id: question
+      attributes:
+          label: Question
+          description: What do you want to know?
+      validations:
+          required: true
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Context
+          description: What did you try? What were you reading? What's the underlying goal?
+      validations:
+          required: false

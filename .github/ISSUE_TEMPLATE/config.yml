@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+    - name: Question or idea
+      url: https://github.com/edjchapman/dotfiles/discussions
+      about: Open a discussion instead — better for "how would I do X" or "would you accept a PR for Y".
+    - name: chezmoi documentation
+      url: https://www.chezmoi.io/
+      about: Most "how do I do X with chezmoi" questions are answered upstream first.
+    - name: Security vulnerability
+      url: https://github.com/edjchapman/dotfiles/security/advisories/new
+      about: Do not open a public issue for security. Report privately via GitHub advisories.

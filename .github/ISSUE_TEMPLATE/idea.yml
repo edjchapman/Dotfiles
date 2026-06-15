@@ -1,0 +1,45 @@
+name: Idea or feature suggestion
+description: Propose a new feature, helper, runbook, or workflow.
+title: "[idea]: <short description>"
+labels: ["idea"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Ideas land best when they describe the **problem first** and the **solution second**. The repo is opinionated and personal-scoped, so not every idea will fit — but well-framed problems are useful even when the answer is "won't do, here's why".
+
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem this would solve
+          description: What hurts today? What would be easier if this existed?
+      validations:
+          required: true
+
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed change
+          description: What would the feature, helper, or workflow look like? Sketch a CLI signature, a config snippet, a runbook step.
+      validations:
+          required: true
+
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered
+          description: What else did you think about? Why is the proposal above better than those?
+      validations:
+          required: false
+
+    - type: dropdown
+      id: scope
+      attributes:
+          label: Scope sense check
+          description: Does this fit the repo's scope?
+          options:
+              - Yes, it's a one-person-Mac concern
+              - Maybe, but mostly personal preference — happy to fork
+              - Not sure
+      validations:
+          required: true

@@ -1,0 +1,72 @@
+name: Bug report
+description: Something is broken or behaving differently than the README / runbooks claim.
+title: "[bug]: <short description>"
+labels: ["bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to file a bug report. The more environment context you include, the faster a fix can land.
+
+              **Before filing:** if this might be a chezmoi-side issue rather than a dotfiles-side issue, search the [chezmoi issue tracker](https://github.com/twpayne/chezmoi/issues) first.
+
+    - type: input
+      id: chezmoi-version
+      attributes:
+          label: chezmoi version
+          description: Output of `chezmoi --version`.
+          placeholder: "chezmoi version v2.x.x, ..."
+      validations:
+          required: true
+
+    - type: dropdown
+      id: machine-type
+      attributes:
+          label: machine_type
+          description: Which init prompt did this machine answer?
+          options:
+              - personal
+              - work
+              - "not sure / both"
+      validations:
+          required: true
+
+    - type: dropdown
+      id: arch
+      attributes:
+          label: Architecture
+          description: From `chezmoi data | grep arch` or `uname -m`.
+          options:
+              - arm64 (Apple Silicon)
+              - amd64 (Intel)
+      validations:
+          required: true
+
+    - type: textarea
+      id: doctor
+      attributes:
+          label: chezmoi doctor output
+          description: Output of `chezmoi doctor`. Redact any home-directory paths if they reveal personal info.
+          render: shell
+      validations:
+          required: true
+
+    - type: textarea
+      id: repro
+      attributes:
+          label: Steps to reproduce
+          description: What did you run? What did you expect? What happened instead?
+          placeholder: |
+              1. Ran `mac`
+              2. Expected …
+              3. Got …
+      validations:
+          required: true
+
+    - type: textarea
+      id: extra
+      attributes:
+          label: Additional context
+          description: Logs, screenshots, `chezmoi diff` output (with secrets redacted), anything else relevant.
+      validations:
+          required: false
