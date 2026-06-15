@@ -1,6 +1,10 @@
 #!/bin/bash
-# Global pre-commit hook — scans for secrets before every commit
-# Managed by chezmoi, deployed to ~/.config/git/hooks/
+# Global pre-commit hook — scans for secrets and lints before every commit.
+# Managed by chezmoi, deployed to ~/.config/git/hooks/.
+#
+# Failure semantics: any failing check exits non-zero and blocks the commit.
+# Each tool's exit code is propagated explicitly so we can print a
+# tool-specific recovery hint before exiting; `set -e` would skip the hint.
 
 # Run ggshield if available
 if command -v ggshield &>/dev/null; then
@@ -17,9 +21,21 @@ fi
 # Run ShellCheck via Makefile if in the dotfiles repo
 if [ -f Makefile ] && grep -q '^lint:' Makefile && command -v shellcheck &>/dev/null; then
     make lint
+    exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        echo ""
+        echo "make lint failed — fix shellcheck violations before committing."
+        exit $exit_code
+    fi
 fi
 
 # Run project-local pre-commit hooks if they exist
 if [ -f .pre-commit-config.yaml ] && command -v pre-commit &>/dev/null; then
     pre-commit run --hook-stage pre-commit "$@"
+    exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        echo ""
+        echo "pre-commit hooks failed — fix violations before committing."
+        exit $exit_code
+    fi
 fi
