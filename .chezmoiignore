@@ -29,6 +29,7 @@ Brewfile.tmpl
 
 # Documentation
 docs
+mkdocs.yml
 
 # Branding, demo, and architecture assets used by the README and Pages site —
 # committed for review and serving, but never deployed to $HOME.

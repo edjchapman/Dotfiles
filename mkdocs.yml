@@ -11,12 +11,7 @@ repo_name: edjchapman/dotfiles
 repo_url: https://github.com/edjchapman/dotfiles
 edit_uri: edit/main/docs/
 
-docs_dir: .
-site_dir: ../site
-
-# Non-strict so the build succeeds when cross-PR files (faq.md, comparison.md,
-# 0004-rebrand-public-showcase.md) haven't merged to main yet. Once they merge,
-# warnings disappear automatically; no follow-up nav edit needed.
+# Non-strict so the build never fails on cross-PR missing-file refs.
 strict: false
 
 theme:
