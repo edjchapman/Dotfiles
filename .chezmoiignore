@@ -10,6 +10,10 @@ Makefile
 README.md
 CLAUDE.md
 AGENTS.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+CHANGELOG.md
 
 # Templates that are rendered/consumed by scripts, not deployed directly
 Brewfile.tmpl
