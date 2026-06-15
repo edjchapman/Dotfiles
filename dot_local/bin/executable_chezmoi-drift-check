@@ -154,7 +154,9 @@ if command -v brew >/dev/null 2>&1; then
         # Extras: cleanup dry-run. Same pattern — non-zero exit with no matched lines means errored.
         cleanup_out=$(brew bundle cleanup --file="$rendered" 2>&1)
         cleanup_rc=$?
-        BREW_EXTRA=$(printf '%s\n' "$cleanup_out" | grep -cE '^Would (uninstall|untap|remove)' || true)
+        # `Would remove: /path/...` lines are routine brew cache cleanups, not
+        # unmanaged packages — accept package-style `Would remove <name>` only.
+        BREW_EXTRA=$(printf '%s\n' "$cleanup_out" | grep -cE '^Would (uninstall|untap) |^Would remove [^:/]' || true)
         if [[ $cleanup_rc -ne 0 && $BREW_EXTRA -eq 0 ]]; then
             HAD_ERROR=1
             err_parts="${err_parts:+$err_parts; }brew bundle cleanup failed"
