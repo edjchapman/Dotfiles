@@ -8,7 +8,8 @@
 #
 # Modes:
 #   (default)  Print human-readable counts.
-#   --drift    Also list each drifted entry.
+#   --drift    Also list each drifted entry AND each unreadable entry (audit
+#              blind spots — typically system-protected paths).
 #   --quiet    TSV output for machine consumers: "<matched>\t<mismatched>\t<unreadable>".
 #   --apply    Re-run the source defaults script (re-asserts everything).
 #
@@ -25,7 +26,8 @@ usage() {
 chezmoi-defaults-audit [--drift] [--quiet] [--apply] [-h]
 
   (no flag)  Print matched/mismatched/unreadable counts.
-  --drift    Also list each drifted entry.
+  --drift    Also list each drifted entry AND each unreadable entry
+             (audit blind spots — typically system-protected paths).
   --quiet    TSV output: "<matched>\t<mismatched>\t<unreadable>".
   --apply    Re-run run_onchange_03-macos-defaults.sh to re-assert all values.
 
@@ -133,6 +135,7 @@ MATCHED=0
 MISMATCHED=0
 UNREADABLE=0
 DRIFT_LINES=()
+UNREADABLE_LINES=()
 
 while IFS=$'\t' read -r ch domain key type expected; do
     [[ -z $domain ]] && continue
@@ -143,6 +146,7 @@ while IFS=$'\t' read -r ch domain key type expected; do
     rc=$?
     if ((rc != 0)); then
         UNREADABLE=$((UNREADABLE + 1))
+        UNREADABLE_LINES+=("$domain :: $key")
         continue
     fi
     case "$type" in
@@ -170,12 +174,21 @@ else
     printf '  matched:     %d\n' "$MATCHED"
     printf '  mismatched:  %d\n' "$MISMATCHED"
     printf '  unreadable:  %d  (typically system-protected paths)\n' "$UNREADABLE"
-    if ((${#DRIFT_LINES[@]} > 0 && PRINT_DRIFT)); then
-        echo
-        echo "Drift:"
-        for l in "${DRIFT_LINES[@]}"; do
-            printf '  - %s\n' "$l"
-        done
+    if ((PRINT_DRIFT)); then
+        if ((${#DRIFT_LINES[@]} > 0)); then
+            echo
+            echo "Drift:"
+            for l in "${DRIFT_LINES[@]}"; do
+                printf '  - %s\n' "$l"
+            done
+        fi
+        if ((${#UNREADABLE_LINES[@]} > 0)); then
+            echo
+            echo "Unreadable (audit blind spots — typically system-protected paths):"
+            for l in "${UNREADABLE_LINES[@]}"; do
+                printf '  - %s\n' "$l"
+            done
+        fi
     elif ((MISMATCHED > 0)); then
         echo
         echo "Re-run with --drift to see specifics, or --apply to re-assert."
