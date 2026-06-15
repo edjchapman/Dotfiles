@@ -2,15 +2,16 @@
 name: Auto-rebase open PRs
 
 # Whenever main advances, rebase every open same-repo PR onto the new tip and
-# force-push the result. PRs from forks are skipped (GITHUB_TOKEN can't push to
-# them). On rebase conflict, the bot comments on the PR and leaves the branch
-# untouched.
+# force-push the result. PRs from forks are skipped (the token can't push to a
+# fork's branch). On rebase conflict, the bot comments on the PR and leaves
+# the branch untouched.
 #
-# Limitation: GITHUB_TOKEN-authored pushes do NOT re-trigger downstream CI
-# (GitHub's anti-recursion guard). The PR's checks will show the pre-rebase
-# state until you push again or click "Re-run all jobs". This is fine because
-# the `required_status_checks.strict=true` branch protection on `main` already
-# blocks merging a PR whose checks haven't run against the current base.
+# Token: prefers `BOT_PAT` (a fine-grained PAT) and falls back to GITHUB_TOKEN.
+# The PAT path re-triggers downstream CI automatically. The fallback path does
+# not (GitHub's anti-recursion guard), so under fallback the PR's checks show
+# the pre-rebase state until someone runs `gh run rerun <id>`. Either way is
+# safe because `required_status_checks.strict=true` on main blocks merging a
+# PR whose checks haven't run against the current base.
 
 on:
     push:
@@ -30,6 +31,7 @@ jobs:
               with:
                   fetch-depth: 0
                   persist-credentials: true
+                  token: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
 
             - name: Configure git identity
               run: |
@@ -38,7 +40,7 @@ jobs:
 
             - name: Rebase every open same-repo PR onto main
               env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GH_TOKEN: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
                   REPO: ${{ github.repository }}
               run: |
                   set -uo pipefail
