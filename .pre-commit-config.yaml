@@ -71,10 +71,19 @@ repos:
             language: system
             files: '\.md$'
 
-          # Existing GitGuardian secret scanning — preserves prior pre-commit hook behavior.
+          # GitGuardian secret scanning.
+          # If ggshield is installed: run it and PRESERVE its exit code so a
+          # detected secret blocks the commit. (The prior `A && B || C` form
+          # silently passed when ggshield ran and failed — security bug.)
+          # If ggshield is missing (pre-bootstrap clone or CI): warn loudly to
+          # stderr and exit 0, since gitleaks + GitGuardian's GitHub App still
+          # cover the secret-scanning baseline.
           - id: ggshield
             name: ggshield secret scan
-            entry: bash -c 'command -v ggshield >/dev/null && ggshield secret scan pre-commit "$@" || exit 0' --
+            # YAML quoting: the whole entry is single-quoted (with '' to escape
+            # the bash command's outer single quotes) so the colon in the warning
+            # message is parsed as a literal, not a mapping operator.
+            entry: 'bash -c ''if command -v ggshield >/dev/null 2>&1; then exec ggshield secret scan pre-commit "$@"; else echo "WARNING: ggshield not installed; secret scan skipped (install via Brewfile or pip)" >&2; exit 0; fi'' --'
             language: system
             pass_filenames: false
             stages: [pre-commit]
