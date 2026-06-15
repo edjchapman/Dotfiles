@@ -1,0 +1,80 @@
+---
+name: Auto-rebase open PRs
+
+# Whenever main advances, rebase every open same-repo PR onto the new tip and
+# force-push the result. PRs from forks are skipped (GITHUB_TOKEN can't push to
+# them). On rebase conflict, the bot comments on the PR and leaves the branch
+# untouched.
+#
+# Limitation: GITHUB_TOKEN-authored pushes do NOT re-trigger downstream CI
+# (GitHub's anti-recursion guard). The PR's checks will show the pre-rebase
+# state until you push again or click "Re-run all jobs". This is fine because
+# the `required_status_checks.strict=true` branch protection on `main` already
+# blocks merging a PR whose checks haven't run against the current base.
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    rebase:
+        name: Rebase open PRs onto main
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+                  persist-credentials: true
+
+            - name: Configure git identity
+              run: |
+                  git config user.name 'github-actions[bot]'
+                  git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+            - name: Rebase every open same-repo PR onto main
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
+              run: |
+                  set -uo pipefail
+                  # headRepositoryOwner.login lets us skip forks — GITHUB_TOKEN
+                  # cannot force-push to a fork's branch.
+                  prs=$(gh pr list --state open --json number,headRefName,headRepositoryOwner \
+                      --jq ".[] | select(.headRepositoryOwner.login == \"${REPO%%/*}\") | \"\(.number)\t\(.headRefName)\"")
+                  if [ -z "$prs" ]; then
+                      echo "No open same-repo PRs to rebase."
+                      exit 0
+                  fi
+                  failures=0
+                  while IFS=$'\t' read -r num branch; do
+                      [ -z "$num" ] && continue
+                      echo "::group::PR #$num ($branch)"
+                      git fetch origin "$branch" "+refs/heads/$branch:refs/remotes/origin/$branch"
+                      git checkout -B "$branch" "origin/$branch"
+                      if git rebase origin/main; then
+                          if git push --force-with-lease origin "$branch"; then
+                              echo "Rebased PR #$num onto main."
+                          else
+                              echo "::warning::Force-push failed for PR #$num — branch advanced concurrently."
+                              failures=$((failures + 1))
+                          fi
+                      else
+                          git rebase --abort || true
+                          echo "::warning::Rebase conflict on PR #$num — leaving branch untouched."
+                          gh pr comment "$num" --body \
+                              "Auto-rebase onto \`main\` hit a conflict and was skipped. Rebase manually: \`git fetch origin main && git rebase origin/main\`."
+                          failures=$((failures + 1))
+                      fi
+                      git checkout main
+                      echo "::endgroup::"
+                  done <<<"$prs"
+                  # Conflict/race is not a hard failure — the bot did its best;
+                  # the per-PR comment already nudges the author.
+                  if [ "$failures" -gt 0 ]; then
+                      echo "Skipped $failures PR(s) — see warnings above."
+                  fi
