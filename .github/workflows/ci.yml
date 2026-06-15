@@ -121,6 +121,32 @@ jobs:
                   done
                   exit $failed
 
+    validate-plists:
+        name: plist XML validation
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - name: Install chezmoi and xmllint
+              run: |
+                  sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
+                  sudo apt-get update && sudo apt-get install -y libxml2-utils
+            - name: Render and validate plist templates
+              run: |
+                  failed=0
+                  while IFS= read -r tmpl; do
+                      echo "::group::Validating $tmpl"
+                      rendered=$(chezmoi execute-template \
+                          --init --source="$(pwd)" \
+                          --override-data '{"machine_type":"personal","gpg_signing_key":"test","chezmoi":{"arch":"arm64"}}' \
+                          < "$tmpl")
+                      if ! printf '%s' "$rendered" | xmllint --noout -; then
+                          echo "::error file=$tmpl::Malformed plist after rendering"
+                          failed=1
+                      fi
+                      echo "::endgroup::"
+                  done < <(find . -name '*.plist.tmpl' -not -path './.git/*')
+                  exit $failed
+
     brew-bundle-check:
         name: brew bundle check (macOS)
         runs-on: macos-latest
