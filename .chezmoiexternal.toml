@@ -1,7 +1,7 @@
 [".oh-my-zsh"]
     type = "archive"
     # Pinned to specific commit for reproducibility — update SHA periodically
-    url = "https://github.com/ohmyzsh/ohmyzsh/archive/a07126330b9f56f12f1e00ddd29786d35d6e64d9.tar.gz"
+    url = "https://github.com/ohmyzsh/ohmyzsh/archive/df34d2b8d575777465aed8ae9b7cd90d63fdcd6e.tar.gz"
     exact = true
     stripComponents = 1
     refreshPeriod = "168h"
