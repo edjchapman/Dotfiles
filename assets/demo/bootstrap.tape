@@ -3,7 +3,11 @@
 #   vhs assets/demo/bootstrap.tape
 #
 # Produces assets/demo/bootstrap.gif (committed alongside this file).
-# Runs against a fake HOME=/tmp/demo so no real ~/edjchapman paths appear.
+#
+# Staged recording: hidden setup defines a `mac` shim function so the visible
+# portion never touches the real chezmoi state or the real Homebrew. The
+# curl-pipe-sh bootstrap line is typed for visual effect only, then erased
+# without executing.
 
 Output assets/demo/bootstrap.gif
 
@@ -11,37 +15,51 @@ Set FontSize 14
 Set Width 1100
 Set Height 600
 Set Theme "GitHub Dark"
-Set PlaybackSpeed 0.6
-Set TypingSpeed 30ms
+Set PlaybackSpeed 0.7
+Set TypingSpeed 35ms
 
-# Setup — run silently so the recording starts on a clean prompt.
+# Hidden setup: clean prompt, define mac() shim with the drift-summary output,
+# clear screen so the recording opens on an empty prompt.
 Hide
-Type "export HOME=/tmp/demo && mkdir -p $HOME && cd $HOME && clear"
+Type 'export PS1="$ "'
 Enter
-Sleep 200ms
+Type "mac() {"
+Enter
+Type "  cat <<'DEMO'"
+Enter
+Type "─── drift summary ──────────────────────────────────────────"
+Enter
+Type "  ✓ \$HOME files          in sync"
+Enter
+Type "  ✓ Brewfile             in sync"
+Enter
+Type "  ✓ macOS defaults       in sync"
+Enter
+Type "  ✓ security baseline    in sync (FileVault, SIP, firewall, keys, perms)"
+Enter
+Type "  ✓ external pins        in sync (oh-my-zsh, claude-code-config)"
+Enter
+Type ""
+Enter
+Type "No drift detected."
+Enter
+Type "DEMO"
+Enter
+Type "}"
+Enter
+Type "clear"
+Enter
 Show
 
-# 1. Bootstrap one-liner.
+# 1. Show the bootstrap one-liner being typed. Cancel with Ctrl+U so it never
+# executes — purely visual.
 Type `sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply edjchapman`
-Sleep 600ms
-Enter
 Sleep 1500ms
-Type "# clones source, fetches externals, runs brew bundle,"
-Sleep 200ms
-Enter
-Type "# applies macOS defaults, decrypts secrets, deploys $HOME"
-Sleep 200ms
-Enter
-Sleep 1500ms
+Ctrl+u
+Sleep 400ms
 
-# 2. Drift check (clean state — what most days look like).
+# 2. The day-to-day surface: mac.
 Type "mac"
 Sleep 500ms
 Enter
-Sleep 2500ms
-
-# 3. The day something drifts: mac walks you through fixing it.
-Type "# (when drift is detected, mac shows a menu — pick a fix, done)"
-Sleep 400ms
-Enter
-Sleep 1500ms
+Sleep 3500ms
