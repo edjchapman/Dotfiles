@@ -31,3 +31,7 @@ tests
 
 # Runtime cache populated by oh-my-zsh on shell startup — not dotfile state.
 .oh-my-zsh/cache/**
+
+# Daily standup logs written into the source dir by the standup skill — kept in
+# the repo for posterity, but not deployed to $HOME.
+standups
