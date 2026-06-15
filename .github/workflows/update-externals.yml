@@ -39,6 +39,7 @@ jobs:
               if: steps.omz.outputs.stale == 'true'
               uses: peter-evans/create-pull-request@v8
               with:
+                  token: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
                   branch: chore/weekly-externals-update
                   delete-branch: true
                   draft: true

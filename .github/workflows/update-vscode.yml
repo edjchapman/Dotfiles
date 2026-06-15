@@ -103,6 +103,7 @@ jobs:
               if: steps.check.outputs.needs_report == 'true'
               uses: peter-evans/create-pull-request@v8
               with:
+                  token: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
                   branch: chore/weekly-vscode-health
                   delete-branch: true
                   draft: true
