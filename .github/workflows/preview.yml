@@ -91,14 +91,18 @@ jobs:
                   python -m pip install --upgrade pip setuptools wheel
                   pip install -r docs/requirements.txt
 
-            - name: Override site_url for preview build
+            - name: Override site_url + RSS link for preview build
               if: steps.secrets.outputs.skip == 'false'
+              env:
+                  PR_N: ${{ github.event.pull_request.number || inputs.pr_number }}
               run: |
-                  # Cloudflare serves previews at https://<sha-or-branch>.<project>.pages.dev
-                  # — strip the production GH Pages URL so relative links resolve
-                  # against whatever origin Cloudflare allocates.
-                  sed -i.bak '/^site_url:/d' mkdocs.yml
-                  echo "site_url: /" >> mkdocs.yml
+                  # Cloudflare serves previews at https://<branch>.<project>.pages.dev.
+                  # Set site_url to the predicted preview URL so canonical/feed/sitemap
+                  # links resolve correctly. mkdocs requires a scheme — `/` is rejected.
+                  preview_url="https://pr-${PR_N}.dotfiles.pages.dev/"
+                  sed -i.bak "s|^site_url:.*|site_url: ${preview_url}|" mkdocs.yml
+                  rm -f mkdocs.yml.bak
+                  echo "::notice::Preview site_url set to ${preview_url}"
 
             - name: Build site
               if: steps.secrets.outputs.skip == 'false'
