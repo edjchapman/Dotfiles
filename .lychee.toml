@@ -3,9 +3,11 @@
 
 # Networking
 max_redirects = 5
-max_retries = 3
-retry_wait_time = 2
-timeout = 10
+max_retries = 5
+retry_wait_time = 3
+# Bumped from 10s — gnu.org/software/* and a few other established docs sites
+# routinely take 15–18s on first request; 10s causes spurious failures in CI.
+timeout = 30
 max_concurrency = 8
 
 # Accept these HTTP statuses as success.
