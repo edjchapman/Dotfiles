@@ -28,9 +28,9 @@ for mirror in "${!MIRRORS[@]}"; do
         continue
     fi
 
-    if ! grep -qE "include-markdown.*['\"]\\.\\./$source_file['\"]" "$mirror"; then
-        echo "ERROR: $mirror does not include-markdown ../$source_file" >&2
-        echo "  Expected a line like: {% include-markdown \"../$source_file\" %}" >&2
+    if ! grep -qE "include-markdown.*['\"]\\.\\./${source_file}['\"]" "$mirror"; then
+        echo "ERROR: $mirror does not include-markdown ../${source_file}" >&2
+        echo "  Expected a line like: {% include-markdown \"../${source_file}\" %}" >&2
         fail=1
     fi
 done

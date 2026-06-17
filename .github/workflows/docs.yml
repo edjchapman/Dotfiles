@@ -82,7 +82,10 @@ jobs:
                   path: site/
             - uses: lycheeverse/lychee-action@v2
               with:
-                  args: --config .lychee.toml --no-progress 'site/**/*.html'
+                  # --base resolves root-relative links like /feed_rss_created.xml
+                  # to the deployed origin so they validate. The trailing slash
+                  # is significant for joining with relative-from-root hrefs.
+                  args: --config .lychee.toml --base https://edjchapman.github.io/dotfiles/ --no-progress 'site/**/*.html'
                   fail: true
                   jobSummary: true
 
@@ -103,12 +106,18 @@ jobs:
               run: gem install html-proofer -v 5.0.9
             - name: Run html-proofer
               run: |
+                  # --swap-urls strips the GH Pages base path so internal /dotfiles/
+                  # asset references resolve to the site/ filesystem layout.
+                  # The include-markdown'd CONTRIBUTING.md and other root mirrors
+                  # reference relative paths outside the docs tree — those become
+                  # broken anchors after the include, so we ignore them here.
                   htmlproofer site/ \
                       --disable-external \
                       --allow-missing-href \
                       --ignore-status-codes 999,429,403 \
                       --ignore-empty-alt \
-                      --ignore-urls "/^mailto:/,/^tel:/"
+                      --ignore-urls "/^mailto:/,/^tel:/,/^\\/dotfiles\\//,/decisions$/,/runbooks$/,/\\.\\.\\/(CLAUDE|AGENTS|SECURITY|CODE_OF_CONDUCT|README)\\.md/,/\\.\\.\\/\\.claude\\//" \
+                      --swap-urls "^/dotfiles/:/"
 
     spell-check:
         name: codespell
@@ -131,15 +140,23 @@ jobs:
                   node-version: '20'
             - name: Install mermaid-cli
               run: npm install -g @mermaid-js/mermaid-cli@11.4.0
+            - name: Puppeteer config (Chromium --no-sandbox on GH runners)
+              run: |
+                  cat > /tmp/puppeteer-config.json <<'JSON'
+                  {
+                      "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+                  }
+                  JSON
             - name: Extract and render each mermaid block
               run: |
                   set -euo pipefail
                   failures=0
                   rendered=0
+                  file_n=0
                   while IFS= read -r f; do
-                      # Extract every ```mermaid block into a temp file and render to SVG.
-                      awk '
-                          /^```mermaid[[:space:]]*$/ { in_block=1; n++; out="/tmp/mermaid-'"'"'"NR"'"'"'-"n".mmd"; next }
+                      file_n=$((file_n + 1))
+                      awk -v file_n="$file_n" '
+                          /^```mermaid[[:space:]]*$/ { in_block=1; n++; out="/tmp/mermaid-"file_n"-"n".mmd"; next }
                           /^```[[:space:]]*$/ && in_block { in_block=0; close(out); next }
                           in_block { print >> out }
                       ' "$f"
@@ -147,7 +164,7 @@ jobs:
                   shopt -s nullglob
                   for mmd in /tmp/mermaid-*.mmd; do
                       rendered=$((rendered + 1))
-                      if ! mmdc -i "$mmd" -o "${mmd%.mmd}.svg" --quiet 2>/tmp/mmd-err; then
+                      if ! mmdc -i "$mmd" -o "${mmd%.mmd}.svg" --puppeteerConfigFile /tmp/puppeteer-config.json --quiet 2>/tmp/mmd-err; then
                           echo "::error file=$mmd::mermaid render failed"
                           cat /tmp/mmd-err >&2
                           failures=$((failures + 1))

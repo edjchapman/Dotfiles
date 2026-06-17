@@ -6,7 +6,6 @@ skip = .git,site,node_modules,*.lock,assets/demo/*.tape,*.svg,*.png
 # Project-specific terms and proper nouns codespell would otherwise flag.
 ignore-words-list = chezmoi,brewup,vhs,lulu,dockutil,mas,ed,nd,fo,ot,thru,te,nin,mke,ans,iam,ist,unx,iterm,homestate,accreting,accrete,acrete
 
-# Allow `gitleaks` "fpr" (fingerprint) etc. in commit messages.
 # Add new acceptable words by extending the list above.
 
 quiet-level = 2

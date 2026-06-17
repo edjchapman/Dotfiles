@@ -249,6 +249,7 @@ nav:
           - Recover from drift: runbooks/recover-from-drift.md
           - Brew sync: runbooks/brew-sync.md
           - Branch protection: runbooks/branch-protection.md
+          - Preview deploys: runbooks/preview-deploys.md
     - Decisions:
           - decisions/index.md
           - 0001 — chezmoi as source of truth: decisions/0001-chezmoi-as-source-of-truth.md
