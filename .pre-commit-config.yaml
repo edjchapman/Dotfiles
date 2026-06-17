@@ -12,7 +12,9 @@ repos:
       hooks:
           - id: check-merge-conflict
           - id: check-yaml
-            exclude: ^\.github/workflows/  # GitHub Actions has truthy `on:` keys
+            # GitHub Actions has truthy `on:` keys; mkdocs.yml uses `!!python/name:`
+            # tags for the emoji generator and Mermaid superfences formatter.
+            exclude: ^(\.github/workflows/|mkdocs\.yml$)
           - id: check-toml
           - id: check-added-large-files
             args: [--maxkb=500]
@@ -47,6 +49,14 @@ repos:
       hooks:
           - id: gitleaks
 
+    - repo: https://github.com/codespell-project/codespell
+      rev: v2.3.0
+      hooks:
+          - id: codespell
+            additional_dependencies: [tomli]
+            files: '\.(md|yml|yaml|toml|py|sh)$'
+            exclude: '^(site/|assets/demo/|.*\.lock$)'
+
     - repo: local
       hooks:
           # ShellCheck for both .sh and .sh.tmpl (template-aware via Makefile).
@@ -70,6 +80,44 @@ repos:
             entry: markdownlint-cli2
             language: system
             files: '\.md$'
+
+          # Docs-site quality gates. Fast (<2s combined); full render runs in CI.
+          - id: mkdocs-config-validate
+            name: mkdocs config validates
+            entry: scripts/check-mkdocs-config.py
+            language: system
+            pass_filenames: false
+            files: '^(mkdocs\.yml|docs/requirements\.txt)$'
+
+          - id: check-mermaid-fences
+            name: mermaid fence declarations are valid
+            entry: scripts/check-mermaid-fences.sh
+            language: system
+            files: '^docs/.*\.md$'
+
+          # Note: language: python so pre-commit creates its own venv with pyyaml,
+          # which avoids depending on the system Python having pyyaml installed.
+          - id: check-docs-nav
+            name: every docs page is in mkdocs.yml nav
+            entry: python3 scripts/check-docs-nav.py
+            language: python
+            additional_dependencies: [pyyaml]
+            pass_filenames: false
+            files: '^(mkdocs\.yml|docs/.*\.md)$'
+
+          - id: check-requirements-sorted
+            name: docs/requirements.txt alphabetised
+            entry: scripts/check-requirements-sorted.sh
+            language: system
+            pass_filenames: false
+            files: '^docs/requirements\.txt$'
+
+          - id: check-root-mirrors
+            name: docs mirrors of root files point at correct source
+            entry: scripts/check-root-mirrors.sh
+            language: system
+            pass_filenames: false
+            files: '^(CHANGELOG\.md|CONTRIBUTING\.md|SECURITY\.md|CODE_OF_CONDUCT\.md|docs/(changelog|contributing|security|code-of-conduct)\.md)$'
 
           # GitGuardian secret scanning.
           # If ggshield is installed: run it and PRESERVE its exit code so a

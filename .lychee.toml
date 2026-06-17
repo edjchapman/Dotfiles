@@ -1,0 +1,43 @@
+# Lychee link-checker config.
+# See https://lychee.cli.rs/ for the full options list.
+
+# Networking
+max_redirects = 5
+max_retries = 3
+retry_wait_time = 2
+timeout = 10
+max_concurrency = 8
+
+# Accept these HTTP statuses as success.
+# 429 (Too Many Requests) often happens against GitHub/Twitter; treat as valid.
+accept = ["200..=204", "206", "301", "302", "304", "307", "308", "429"]
+
+# Skip schemes that lychee shouldn't validate.
+exclude = [
+    "^mailto:",
+    "^tel:",
+    "^chrome://",
+    "^file://",
+    # Anchored-only fragments handled by htmlproofer.
+    "^#",
+]
+
+# Skip these paths entirely.
+exclude_path = [
+    "site/assets/images/social/",  # auto-generated social cards
+    "site/sitemap.xml",            # validated by sitemap-completeness job
+    "node_modules/",
+]
+
+# Hosts we'll skip even when referenced (flaky or auth-gated).
+exclude_loopback = true
+
+# Be honest about who we are; some hosts 403 the default UA.
+user_agent = "lychee/dotfiles-docs (+https://edjchapman.github.io/dotfiles/)"
+
+# Cache successful results for the duration of one CI day.
+cache = true
+max_cache_age = "1d"
+
+# Treat any non-success as a failure to break CI.
+require_https = false

@@ -1,2 +1,13 @@
-mkdocs-material==9.5.39
+# Pinned for reproducibility. Bump via Dependabot (pip group).
+# Keep alphabetised so `sort -c` passes the pre-commit hook.
+# mkdocs-macros-plugin omitted — its Jinja2 `{{ }}` syntax collides with
+# chezmoi templates that the docs frequently reference verbatim.
+mkdocs-git-revision-date-localized-plugin==1.2.9
+mkdocs-glightbox==0.4.0
+mkdocs-include-markdown-plugin==7.0.0
+mkdocs-material[imaging]==9.5.39
+mkdocs-minify-plugin==0.8.0
+mkdocs-redirects==1.2.1
+mkdocs-rss-plugin==1.17.1
+mkdocs-section-index==0.3.9
 pymdown-extensions==10.21.3

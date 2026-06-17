@@ -14,6 +14,14 @@ config:
     MD041: false
     # Table column style varies by editor; we don't enforce it.
     MD060: false
+    # MD025 by default treats YAML frontmatter `title:` as an H1 and clashes
+    # with the body's `# Heading`. We use both — disable the frontmatter check.
+    MD025:
+        front_matter_title: ""
+    # MD046 enforces a single code-block style (fenced vs indented). Disable —
+    # mkdocs-material content tabs and `??? abstract` collapsibles indent prose
+    # lists 4 spaces, which the linter sees as "indented code" even when it's not.
+    MD046: false
 
 ignores:
     - .git

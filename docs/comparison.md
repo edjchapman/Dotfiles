@@ -6,12 +6,12 @@ The repos below are well-known macOS-leaning dotfiles projects. The comparison i
 
 | Repo | Stars | Templating | Encrypted secrets | Self-healing | Agent-ready | License |
 |---|---|---|---|---|---|---|
-| **[edjchapman/dotfiles](https://github.com/edjchapman/dotfiles)** | — | ✓ chezmoi, 4-cell matrix-tested | ✓ age | ✓ `mac` + drift banner + daily LaunchAgent | ✓ CLAUDE.md, AGENTS.md, project-scoped Claude config | MIT |
-| [mathiasbynens/dotfiles](https://github.com/mathiasbynens/dotfiles) | 32k+ | ✗ shell + macOS defaults | ✗ | ✗ | ✗ | MIT |
-| [holman/dotfiles](https://github.com/holman/dotfiles) | 9k+ | ✗ topic-folder convention | ✗ | ✗ | ✗ | MIT |
-| [thoughtbot/dotfiles](https://github.com/thoughtbot/dotfiles) | 9k+ | ✗ rcm-managed | ✗ | ✗ | ✗ | MIT |
-| [paulirish/dotfiles](https://github.com/paulirish/dotfiles) | 7k+ | ✗ shell + git config | ✗ | ✗ | ✗ | MIT |
-| [nicknisi/dotfiles](https://github.com/nicknisi/dotfiles) | 4k+ | ✗ install.sh + symlinks | ✗ | ✗ | ✗ | MIT |
+| **[edjchapman/dotfiles](https://github.com/edjchapman/dotfiles)** | — | :material-check:{ .green } chezmoi, 4-cell matrix-tested | :material-check:{ .green } age | :material-check:{ .green } `mac` + drift banner + daily LaunchAgent | :material-check:{ .green } CLAUDE.md, AGENTS.md, project-scoped Claude config | MIT |
+| [mathiasbynens/dotfiles](https://github.com/mathiasbynens/dotfiles) | 32k+ | :material-close:{ .red } shell + macOS defaults | :material-close:{ .red } | :material-close:{ .red } | :material-close:{ .red } | MIT |
+| [holman/dotfiles](https://github.com/holman/dotfiles) | 9k+ | :material-close:{ .red } topic-folder convention | :material-close:{ .red } | :material-close:{ .red } | :material-close:{ .red } | MIT |
+| [thoughtbot/dotfiles](https://github.com/thoughtbot/dotfiles) | 9k+ | :material-close:{ .red } rcm-managed | :material-close:{ .red } | :material-close:{ .red } | :material-close:{ .red } | MIT |
+| [paulirish/dotfiles](https://github.com/paulirish/dotfiles) | 7k+ | :material-close:{ .red } shell + git config | :material-close:{ .red } | :material-close:{ .red } | :material-close:{ .red } | MIT |
+| [nicknisi/dotfiles](https://github.com/nicknisi/dotfiles) | 4k+ | :material-close:{ .red } install.sh + symlinks | :material-close:{ .red } | :material-close:{ .red } | :material-close:{ .red } | MIT |
 
 Star counts are approximate as of mid-2026 and rounded down; check the linked repo for the current figure.
 

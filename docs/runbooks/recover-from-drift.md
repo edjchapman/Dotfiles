@@ -41,6 +41,46 @@ After addressing a finding, `chezmoi-drift-check --full` (or just `mac` again) r
 
 ## How drift surfaces (signal sources)
 
+Three concurrent signals all feed a single cache, consumed by one entry point:
+
+```mermaid
+flowchart LR
+    subgraph SIGNALS["Three concurrent signals"]
+        BANNER["Shell banner<br/>(every new terminal)"]
+        AGENT["LaunchAgent<br/>(09:30 daily)"]
+        WRAPPER["brew/mas wrapper<br/>(every install/uninstall)"]
+    end
+    CACHE["~/.cache/chezmoi-drift/state"]
+    MAC["mac<br/>(= chezmoi-fix)"]
+
+    subgraph FIXES["Remediation paths"]
+        HD["HOME_DRIFT<br/>→ chezmoi apply or re-add"]
+        BM["BREW_MISSING<br/>→ brew bundle install"]
+        BE["BREW_EXTRA<br/>→ chezmoi-brew-sync"]
+        DD["DEFAULTS_DRIFT<br/>→ chezmoi-defaults-audit --apply"]
+        SD["SECURITY_DRIFT<br/>→ manual (audit is read-only)"]
+    end
+
+    BANNER --> CACHE
+    AGENT --> CACHE
+    WRAPPER --> CACHE
+    CACHE --> MAC
+    MAC --> HD
+    MAC --> BM
+    MAC --> BE
+    MAC --> DD
+    MAC --> SD
+
+    classDef signal fill:#eef2ff,stroke:#58a6ff,color:#1a1f36
+    classDef cache fill:#fff5d6,stroke:#a371f7,color:#1a1f36
+    classDef entry fill:#e5f9ee,stroke:#3aa56d,color:#1a1f36
+    classDef fix fill:#fee5e5,stroke:#d05656,color:#1a1f36
+    class BANNER,AGENT,WRAPPER signal
+    class CACHE cache
+    class MAC entry
+    class HD,BM,BE,DD,SD fix
+```
+
 Three machine-resident signals run automatically; you don't need to remember to check:
 
 - **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `chezmoi: 3 thing(s) need attention — run 'mac'`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
@@ -128,6 +168,9 @@ If the log shows API errors, re-run via `gh workflow run update-externals.yml` (
 
 ## Last resort
 
+!!! warning "Destructive — read carefully"
+    `chezmoi state delete-bucket --bucket=entryState` makes chezmoi forget which files it has tracked. The next `chezmoi apply` will redeploy every managed file (with the source winning every conflict). If anything in `$HOME` should win, **`re-add` it first** before deleting the bucket.
+
 If state is so confused that `chezmoi diff` is unreadable:
 
 ```bash
@@ -138,3 +181,10 @@ chezmoi apply --dry-run             # rebuild the picture
 ```
 
 Only run `chezmoi apply` (no dry-run) once the diff looks correct.
+
+## See also
+
+- [Secret rotation](secret-rotation.md) — when `chezmoi verify` reports "no identity matched any of the recipients".
+- [Brew sync](brew-sync.md) — for `BREW_EXTRA` / `BREW_MISSING` drift specifically.
+- [Troubleshooting](../troubleshooting.md) — symptom-driven index of errors and fixes.
+- [Gotchas](../gotchas.md) — common drift pitfalls.
