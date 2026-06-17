@@ -20,6 +20,14 @@ exclude = [
     "^file://",
     # Anchored-only fragments handled by htmlproofer.
     "^#",
+    # Self-referencing canonical/asset URLs. Mkdocs generates these into
+    # <link rel="canonical">, sitemap, RSS, and timeago JS asset paths
+    # based on site_url. Internal-link validity is already covered by
+    # htmlproofer against the built site/ tree, so we don't need lychee
+    # to GET them — and on PRs where new pages haven't deployed yet,
+    # they 404 against production.
+    "^https://edjchapman\\.github\\.io/dotfiles/",
+    "^https://edjchapman\\.github\\.io/",
 ]
 
 # Skip these paths entirely.
