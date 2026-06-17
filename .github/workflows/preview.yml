@@ -27,6 +27,12 @@ on:
             - SECURITY.md
             - CODE_OF_CONDUCT.md
             - .github/workflows/preview.yml
+    workflow_dispatch:
+        inputs:
+            pr_number:
+                description: 'PR number to attach the preview to (for branch alias)'
+                required: true
+                type: string
 
 permissions:
     contents: read
@@ -41,8 +47,9 @@ jobs:
     deploy-preview:
         name: Build + deploy preview to Cloudflare Pages
         runs-on: ubuntu-latest
-        # Soft gate — if secrets aren't provisioned, exit early with a notice.
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        # Soft gate — skip fork PRs (no access to secrets). workflow_dispatch
+        # is always allowed since it's triggered by a maintainer.
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
         steps:
             - uses: actions/checkout@v6
               with:
@@ -97,6 +104,13 @@ jobs:
               if: steps.secrets.outputs.skip == 'false'
               run: mkdocs build
 
+            - name: Resolve preview branch alias
+              if: steps.secrets.outputs.skip == 'false'
+              id: alias
+              run: |
+                  pr_n="${{ github.event.pull_request.number || inputs.pr_number }}"
+                  echo "branch=pr-${pr_n}" >> "$GITHUB_OUTPUT"
+
             - name: Deploy to Cloudflare Pages
               if: steps.secrets.outputs.skip == 'false'
               id: deploy
@@ -104,7 +118,7 @@ jobs:
               with:
                   apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-                  command: pages deploy site --project-name=dotfiles --branch=pr-${{ github.event.pull_request.number }}
+                  command: pages deploy site --project-name=dotfiles --branch=${{ steps.alias.outputs.branch }}
 
             - name: Find existing preview comment
               if: steps.secrets.outputs.skip == 'false'
