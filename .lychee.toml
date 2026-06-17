@@ -35,6 +35,9 @@ exclude = [
     # a PR 404 against main until merge. The PR diff itself proves the
     # files exist; lychee re-checking is redundant.
     "^https://github\\.com/edjchapman/dotfiles/(blob|edit|raw)/main/",
+    # gnu.org/software/* reliably times out from GH runners (>30s+5retries).
+    # The destination is genuine and stable; the path between is slow.
+    "^https://www\\.gnu\\.org/",
 ]
 
 # Skip these paths entirely.
