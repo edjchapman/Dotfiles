@@ -28,6 +28,11 @@ exclude = [
     # they 404 against production.
     "^https://edjchapman\\.github\\.io/dotfiles/",
     "^https://edjchapman\\.github\\.io/",
+    # Material's content.action.edit / content.action.view features render
+    # blob/edit/raw URLs against main for every page. New pages added in
+    # a PR 404 against main until merge. The PR diff itself proves the
+    # files exist; lychee re-checking is redundant.
+    "^https://github\\.com/edjchapman/dotfiles/(blob|edit|raw)/main/",
 ]
 
 # Skip these paths entirely.
