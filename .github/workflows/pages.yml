@@ -1,4 +1,9 @@
 ---
+# Production deploy of the docs site to Cloudflare Pages.
+# Custom domain attached in CF dashboard: https://dotfiles.edchapman.co.uk
+# Per-PR previews handled separately by preview.yml.
+# See docs/runbooks/cloudflare-deploys.md and docs/runbooks/custom-domain.md.
+
 name: Pages
 
 on:
@@ -16,16 +21,14 @@ on:
 
 permissions:
     contents: read
-    pages: write
-    id-token: write
 
 concurrency:
-    group: pages
+    group: pages-prod
     cancel-in-progress: false
 
 jobs:
-    build:
-        name: Build mkdocs-material site
+    deploy:
+        name: Build + deploy to Cloudflare Pages production
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
@@ -60,19 +63,15 @@ jobs:
             - name: Build site (strict)
               run: mkdocs build --strict
 
-            - uses: actions/configure-pages@v6
-
-            - uses: actions/upload-pages-artifact@v3
+            - name: Deploy to Cloudflare Pages production (branch=main)
+              id: deploy
+              uses: cloudflare/wrangler-action@v3
               with:
-                  path: site
+                  apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  command: pages deploy site --project-name=dotfiles --branch=main
 
-    deploy:
-        name: Deploy to GitHub Pages
-        needs: build
-        runs-on: ubuntu-latest
-        environment:
-            name: github-pages
-            url: ${{ steps.deployment.outputs.page_url }}
-        steps:
-            - id: deployment
-              uses: actions/deploy-pages@v4
+            - name: Report deploy URL
+              run: |
+                  echo "::notice::Production deployment: ${{ steps.deploy.outputs.deployment-url }}"
+                  echo "::notice::Custom domain: https://dotfiles.edchapman.co.uk/"

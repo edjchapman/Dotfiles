@@ -86,7 +86,7 @@ jobs:
                   # --base resolves root-relative links like /feed_rss_created.xml
                   # to the deployed origin so they validate. The trailing slash
                   # is significant for joining with relative-from-root hrefs.
-                  args: --config .lychee.toml --base https://edjchapman.github.io/dotfiles/ --no-progress 'site/**/*.html'
+                  args: --config .lychee.toml --base https://dotfiles.edchapman.co.uk/ --no-progress 'site/**/*.html'
                   fail: true
                   jobSummary: true
 

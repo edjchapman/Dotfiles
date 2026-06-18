@@ -30,6 +30,9 @@ exclude = [
     # htmlproofer against the built site/ tree, so we don't need lychee
     # to GET them — and on PRs where new pages haven't deployed yet,
     # they 404 against production.
+    "^https://dotfiles\\.edchapman\\.co\\.uk/",
+    "^https://dotfiles\\.edwardchapman\\.co\\.uk/",
+    # Old GH Pages URLs — kept after migration to CF Pages as defence in depth.
     "^https://edjchapman\\.github\\.io/dotfiles/",
     "^https://edjchapman\\.github\\.io/",
     # Material's content.action.edit / content.action.view features render
@@ -53,7 +56,7 @@ exclude_path = [
 exclude_loopback = true
 
 # Be honest about who we are; some hosts 403 the default UA.
-user_agent = "lychee/dotfiles-docs (+https://edjchapman.github.io/dotfiles/)"
+user_agent = "lychee/dotfiles-docs (+https://dotfiles.edchapman.co.uk/)"
 
 # Cache successful results for the duration of one CI day.
 cache = true
