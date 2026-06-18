@@ -65,7 +65,7 @@ jobs:
             - name: Count built pages
               id: count
               run: echo "pages=$(find site -name 'index.html' | wc -l)" >> "$GITHUB_OUTPUT"
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               with:
                   name: site
                   path: site/
