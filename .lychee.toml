@@ -12,7 +12,9 @@ max_concurrency = 8
 
 # Accept these HTTP statuses as success.
 # 429 (Too Many Requests) often happens against GitHub/Twitter; treat as valid.
-accept = ["200..=204", "206", "301", "302", "304", "307", "308", "429"]
+# 403 (Forbidden) is the standard for auth-walled pages like dash.cloudflare.com
+# — the URL is genuine, just requires sign-in to reach the actual content.
+accept = ["200..=204", "206", "301", "302", "304", "307", "308", "403", "429"]
 
 # Skip schemes that lychee shouldn't validate.
 exclude = [
