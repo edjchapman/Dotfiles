@@ -91,7 +91,7 @@ jobs:
                   python -m pip install --upgrade pip setuptools wheel
                   pip install -r docs/requirements.txt
 
-            - name: Override site_url + RSS link for preview build
+            - name: Override site_url + strip RSS plugin for preview build
               if: steps.secrets.outputs.skip == 'false'
               env:
                   PR_N: ${{ github.event.pull_request.number || inputs.pr_number }}
@@ -104,7 +104,26 @@ jobs:
                   preview_url="https://pr-${PR_N}.${CF_SUBDOMAIN}.pages.dev/"
                   sed -i.bak "s|^site_url:.*|site_url: ${preview_url}|" mkdocs.yml
                   rm -f mkdocs.yml.bak
-                  echo "::notice::Preview site_url set to ${preview_url}"
+
+                  # Strip the rss plugin block — it HEAD-fetches every social card
+                  # image to populate <enclosure length="…">. For PRs introducing
+                  # new pages, those images don't exist on the preview URL yet
+                  # (chicken-and-egg: preview must be built before deploy can serve
+                  # the assets), so the fetch returns None and int(None) crashes.
+                  # Production builds keep the plugin; preview builds skip the feed.
+                  python3 - <<'PYEOF'
+                  import re
+                  src = open('mkdocs.yml').read()
+                  # Match `    - rss:` through to the next `    - ` plugin entry.
+                  stripped = re.sub(
+                      r'    - rss:\n(?:        .*\n|          .*\n|              .*\n)*',
+                      '',
+                      src,
+                  )
+                  open('mkdocs.yml', 'w').write(stripped)
+                  PYEOF
+
+                  echo "::notice::Preview site_url set to ${preview_url}, RSS plugin disabled"
 
             - name: Build site
               if: steps.secrets.outputs.skip == 'false'
