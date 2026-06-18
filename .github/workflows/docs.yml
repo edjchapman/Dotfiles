@@ -1,0 +1,304 @@
+---
+name: Docs
+
+on:
+    pull_request:
+        paths:
+            - docs/**
+            - mkdocs.yml
+            - CHANGELOG.md
+            - CONTRIBUTING.md
+            - SECURITY.md
+            - CODE_OF_CONDUCT.md
+            - .github/workflows/docs.yml
+            - .lychee.toml
+            - .codespellrc
+    push:
+        branches: [main]
+        paths:
+            - docs/**
+            - mkdocs.yml
+            - CHANGELOG.md
+            - CONTRIBUTING.md
+            - SECURITY.md
+            - CODE_OF_CONDUCT.md
+            - .github/workflows/docs.yml
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: docs-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build:
+        name: mkdocs build (strict)
+        runs-on: ubuntu-latest
+        outputs:
+            page-count: ${{ steps.count.outputs.pages }}
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+            - name: Install Cairo + Pango for social cards (cached)
+              # awalsh128/cache-apt-pkgs-action: caches the .deb downloads
+              # between runs so a slow azure.archive.ubuntu.com mirror only
+              # hurts the cache-miss path, not every subsequent run. Also
+              # uses a single composite get + install in fewer round-trips.
+              uses: awalsh128/cache-apt-pkgs-action@v1
+              with:
+                  packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
+                  version: 1.0
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: '3.12'
+                  cache: pip
+                  cache-dependency-path: docs/requirements.txt
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip setuptools wheel
+                  pip install -r docs/requirements.txt
+            - name: Build site (strict mode)
+              run: mkdocs build --strict
+            - name: Count built pages
+              id: count
+              run: echo "pages=$(find site -name 'index.html' | wc -l)" >> "$GITHUB_OUTPUT"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: site
+                  path: site/
+                  retention-days: 3
+
+    linkcheck:
+        name: lychee link check
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - uses: lycheeverse/lychee-action@v2
+              with:
+                  # --base resolves root-relative links like /feed_rss_created.xml
+                  # to the deployed origin so they validate. The trailing slash
+                  # is significant for joining with relative-from-root hrefs.
+                  args: --config .lychee.toml --base https://edjchapman.github.io/dotfiles/ --no-progress 'site/**/*.html'
+                  fail: true
+                  jobSummary: true
+
+    htmlproofer:
+        name: htmlproofer
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - uses: ruby/setup-ruby@v1
+              with:
+                  ruby-version: '3.3'
+            - name: Install html-proofer
+              run: gem install html-proofer -v 5.0.9
+            - name: Run html-proofer
+              run: |
+                  # --swap-urls strips the GH Pages base path so internal /dotfiles/
+                  # asset references resolve to the site/ filesystem layout.
+                  # The include-markdown'd CONTRIBUTING.md and other root mirrors
+                  # reference relative paths outside the docs tree — those become
+                  # broken anchors after the include, so we ignore them here.
+                  htmlproofer site/ \
+                      --disable-external \
+                      --allow-missing-href \
+                      --ignore-status-codes 999,429,403 \
+                      --ignore-empty-alt \
+                      --ignore-urls "/^mailto:/,/^tel:/,/^\\/dotfiles\\//,/decisions$/,/runbooks$/,/\\.\\.\\/(CLAUDE|AGENTS|SECURITY|CODE_OF_CONDUCT|README)\\.md/,/\\.\\.\\/\\.claude\\//" \
+                      --swap-urls "^/dotfiles/:/"
+
+    spell-check:
+        name: codespell
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: codespell-project/actions-codespell@v2
+              with:
+                  check_filenames: true
+                  check_hidden: true
+                  skip: ./.git,./site,./node_modules,./assets/demo/*.tape,*.svg,*.png,*.lock
+
+    mermaid-render:
+        name: mermaid syntax check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '20'
+            - name: Install mermaid-cli
+              run: npm install -g @mermaid-js/mermaid-cli@11.4.0
+            - name: Puppeteer config (Chromium --no-sandbox on GH runners)
+              run: |
+                  cat > /tmp/puppeteer-config.json <<'JSON'
+                  {
+                      "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+                  }
+                  JSON
+            - name: Extract and render each mermaid block
+              run: |
+                  set -euo pipefail
+                  failures=0
+                  rendered=0
+                  file_n=0
+                  while IFS= read -r f; do
+                      file_n=$((file_n + 1))
+                      awk -v file_n="$file_n" '
+                          /^```mermaid[[:space:]]*$/ { in_block=1; n++; out="/tmp/mermaid-"file_n"-"n".mmd"; next }
+                          /^```[[:space:]]*$/ && in_block { in_block=0; close(out); next }
+                          in_block { print >> out }
+                      ' "$f"
+                  done < <(find docs -name '*.md' -type f)
+                  shopt -s nullglob
+                  for mmd in /tmp/mermaid-*.mmd; do
+                      rendered=$((rendered + 1))
+                      if ! mmdc -i "$mmd" -o "${mmd%.mmd}.svg" --puppeteerConfigFile /tmp/puppeteer-config.json --quiet 2>/tmp/mmd-err; then
+                          echo "::error file=$mmd::mermaid render failed"
+                          cat /tmp/mmd-err >&2
+                          failures=$((failures + 1))
+                      fi
+                  done
+                  echo "::notice::rendered $rendered diagrams, $failures failures"
+                  exit "$failures"
+
+    social-cards-generated:
+        name: social cards generated
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - name: Assert social-card PNGs exist
+              run: |
+                  set -euo pipefail
+                  count=$(find site/assets/images/social -name '*.png' 2>/dev/null | wc -l)
+                  echo "::notice::found $count social-card images"
+                  if [[ "$count" -lt 5 ]]; then
+                      echo "::error::expected at least 5 social-card images, got $count" >&2
+                      echo "Hint: confirm Cairo/Pango installed in build job and Material[imaging] is pinned in docs/requirements.txt" >&2
+                      exit 1
+                  fi
+
+    rss-validity:
+        name: RSS feed validates
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - name: Install xmllint
+              run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+            - name: Validate feed.xml
+              run: |
+                  set -euo pipefail
+                  if [[ ! -f site/feed_rss_created.xml ]] && [[ ! -f site/feed.xml ]]; then
+                      echo "::warning::RSS feed not generated (mkdocs-rss-plugin may be disabled or no pages tagged)"
+                      exit 0
+                  fi
+                  for feed in site/feed_rss_created.xml site/feed.xml; do
+                      [[ -f "$feed" ]] || continue
+                      echo "Validating $feed"
+                      xmllint --noout "$feed"
+                  done
+
+    sitemap-completeness:
+        name: sitemap completeness
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - name: Cross-check sitemap entries against built pages
+              run: |
+                  set -euo pipefail
+                  sudo apt-get update && sudo apt-get install -y libxml2-utils
+                  if [[ ! -f site/sitemap.xml ]]; then
+                      echo "::error::site/sitemap.xml missing" >&2
+                      exit 1
+                  fi
+                  url_count=$(xmllint --xpath 'count(//*[local-name()="url"])' site/sitemap.xml)
+                  page_count=$(find site -name 'index.html' | wc -l | tr -d ' ')
+                  echo "::notice::sitemap urls=$url_count, built pages=$page_count"
+                  if [[ "$url_count" -lt 5 ]]; then
+                      echo "::error::sitemap suspiciously short ($url_count urls)" >&2
+                      exit 1
+                  fi
+
+    bundle-size:
+        name: bundle size report
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/download-artifact@v5
+              with:
+                  name: site
+                  path: site/
+            - name: Report site size
+              run: |
+                  set -euo pipefail
+                  total=$(du -sh site/ | cut -f1)
+                  html=$(find site -name '*.html' | xargs cat | wc -c)
+                  css=$(find site -name '*.css' 2>/dev/null | xargs cat 2>/dev/null | wc -c || echo 0)
+                  js=$(find site -name '*.js' 2>/dev/null | xargs cat 2>/dev/null | wc -c || echo 0)
+                  images=$(find site -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.svg' \) | xargs du -bc 2>/dev/null | tail -1 | cut -f1 || echo 0)
+                  echo "::notice::Total site size: $total"
+                  echo "HTML: $((html / 1024)) KB" >> "$GITHUB_STEP_SUMMARY"
+                  echo "CSS: $((css / 1024)) KB" >> "$GITHUB_STEP_SUMMARY"
+                  echo "JS: $((js / 1024)) KB" >> "$GITHUB_STEP_SUMMARY"
+                  echo "Images: $((images / 1024)) KB" >> "$GITHUB_STEP_SUMMARY"
+                  echo "Total: $total" >> "$GITHUB_STEP_SUMMARY"
+                  hard_cap=$((50 * 1024 * 1024))
+                  actual=$(du -sb site/ | cut -f1)
+                  if [[ "$actual" -gt "$hard_cap" ]]; then
+                      echo "::error::site/ exceeds 50 MB hard cap ($actual bytes)" >&2
+                      exit 1
+                  fi
+
+    docs-checks-passed:
+        name: docs checks passed
+        if: always()
+        needs:
+            - build
+            - linkcheck
+            - htmlproofer
+            - spell-check
+            - mermaid-render
+            - social-cards-generated
+            - rss-validity
+            - sitemap-completeness
+            - bundle-size
+        runs-on: ubuntu-latest
+        steps:
+            - name: Verify all dependencies succeeded
+              run: |
+                  set -euo pipefail
+                  results='${{ toJSON(needs) }}'
+                  echo "$results" | python3 -c '
+                  import json, sys
+                  data = json.load(sys.stdin)
+                  failed = [k for k, v in data.items() if v.get("result") not in ("success", "skipped")]
+                  if failed:
+                      print(f"::error::docs checks failed: {failed}", file=sys.stderr)
+                      sys.exit(1)
+                  print(f"::notice::all docs checks passed ({len(data)} jobs)")
+                  '

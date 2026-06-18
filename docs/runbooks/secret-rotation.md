@@ -2,6 +2,25 @@
 
 Two distinct scenarios. Pick the right one.
 
+## Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> SecretValid
+    SecretValid --> SingleRotation: AWS/PAT/etc. compromised
+    SingleRotation --> SecretValid: edit ~/.zshrc.local<br/>chezmoi add --encrypt<br/>commit
+    SecretValid --> KeyRotation: age key compromised
+    KeyRotation --> NewKey: age-keygen -o key.txt.new
+    NewKey --> DecryptedBlobs: age -d -i old/key.txt
+    DecryptedBlobs --> RecipientUpdated: edit .chezmoi.toml.tmpl
+    RecipientUpdated --> ReEncryptedBlobs: age -r new -o ...
+    ReEncryptedBlobs --> KeysSwapped: mv key.txt.new key.txt
+    KeysSwapped --> Verified: chezmoi diff (silent)
+    Verified --> Distributed: copy to every machine
+    Distributed --> SecretValid: commit + rm old key
+    SecretValid --> [*]
+```
+
 ## Rotate a single secret (e.g. AWS key, GitHub PAT)
 
 The plaintext secret lives in a file in `$HOME` (typically `~/.zshrc.local`). The repo only ever holds the encrypted blob.
@@ -29,6 +48,9 @@ git commit -m "chore(secrets): rotate AWS key"
 If `git diff --stat` shows any non-`.age` file containing a credential, **stop**. Run `git restore --staged <file>` and figure out where the plaintext came from before continuing.
 
 ## Rotate the age key itself
+
+!!! danger "Destructive — back up first"
+    This rewrites every `*.age` blob in the repo. **Confirm the new key is backed up to your password manager before proceeding.** If anything fails after step 5 (key swap), recovery requires the new key.
 
 This is a much bigger operation. The age key decrypts every `.age` file in the repo, so rotating it requires re-encrypting all of them.
 
@@ -99,8 +121,17 @@ The complete contents of `~/.config/chezmoi/key.txt` — all three lines (`# cre
 
 ### Strategies (pick one — multiple is better)
 
-1. **Password manager (recommended)** — 1Password / Dashlane / Bitwarden / iCloud Keychain all support free-form secure notes. Create one titled `chezmoi age private key (Mac primary)`, paste in the file contents, tag it `infrastructure`. Trust boundary: your password-manager master credential.
-2. **Passphrase-encrypted blob in any cloud** — `age -p ~/.config/chezmoi/key.txt > ~/iCloud\ Drive/chezmoi-key.txt.age` prompts for a passphrase; the resulting blob is decryptable only with that passphrase, so the cloud provider sees only ciphertext. Two-factor: cloud account + passphrase. Higher friction than a password manager; smaller single-point-of-failure surface.
+| Strategy | Trust boundary | Online? | Friction (recovery) | Single point of failure |
+|---|---|---|---|---|
+| **Password manager** (recommended) | Master credential + 2FA | Yes | Low — open vault, copy-paste | Vault provider |
+| **Passphrase-encrypted blob in cloud** | Cloud account + age passphrase | Yes | Medium — download + `age -d -p` | Forgotten passphrase |
+| **Hardware USB (encrypted)** | Physical access | No | Medium — locate USB, mount, copy | USB lost/damaged |
+| **Paper print (fireproof safe)** | Physical access | No | High — type ~200 bytes by hand | Fire/water; misfiled |
+
+Details:
+
+1. **Password manager (recommended)** — 1Password / Dashlane / Bitwarden / iCloud Keychain all support free-form secure notes. Create one titled `chezmoi age private key (Mac primary)`, paste in the file contents, tag it `infrastructure`.
+2. **Passphrase-encrypted blob in any cloud** — `age -p ~/.config/chezmoi/key.txt > ~/iCloud\ Drive/chezmoi-key.txt.age` prompts for a passphrase; the resulting blob is decryptable only with that passphrase, so the cloud provider sees only ciphertext. Higher friction than a password manager; smaller single-point-of-failure surface.
 3. **Hardware USB stored physically** — copy `key.txt` to an encrypted USB stick (e.g. APFS-encrypted), put it somewhere durable. No online dependency. Friction: needs physical access on recovery.
 4. **Paper print** — the key file is under 200 bytes; one printed page in a fireproof safe is a real, audit-friendly fallback. Combines well with a hardware token guarding the password manager.
 
@@ -128,3 +159,10 @@ If `age-keygen -y` outputs a recipient that doesn't match the one in `.chezmoi.t
 - Any sync target that also mirrors `~/.config/chezmoi/` to a shared cloud account someone else can access (e.g. a family iCloud, a work Google Drive that admins can subpoena).
 - A non-encrypted USB stick.
 - Email or chat with cleartext attachments.
+
+## See also
+
+- [New machine bootstrap](new-machine.md) — step 1 covers placing the age key.
+- [Recover from drift](recover-from-drift.md) — when `chezmoi verify` errors with "no identity matched any of the recipients".
+- [ADR-0002 — age encryption](../decisions/0002-age-encryption.md) — why age over GPG/sops/git-crypt.
+- [Gotchas](../gotchas.md) — common mistakes around `--encrypt` and key backup.

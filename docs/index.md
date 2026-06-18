@@ -2,6 +2,9 @@
 
 Reproducible, privacy-hardened macOS configuration managed with [chezmoi](https://www.chezmoi.io/). One command bootstraps a clean Mac into a fully configured environment: shell, packages, git, encrypted secrets, macOS preferences, Dock, firewall, and Claude Code config. Drift is detected from the shell banner; remediation is a single `mac` command.
 
+!!! tip "First time here?"
+    Start with the [Architecture overview](architecture.md) for the 60-second mental model, or jump straight to the [Quick start](runbooks/new-machine.md) bootstrap walkthrough.
+
 ## Bootstrap a clean Mac
 
 Drop your age private key in `~/.config/chezmoi/key.txt` (see [New machine bootstrap](runbooks/new-machine.md) for the full procedure), then:
@@ -24,14 +27,18 @@ Wall-clock time: ~30 minutes, mostly waiting on Homebrew downloads.
 
 | If you want to … | Read … |
 |---|---|
-| Bootstrap a Mac | [Runbook: new machine](runbooks/new-machine.md) |
-| Rotate a secret or the age key | [Runbook: secret rotation](runbooks/secret-rotation.md) |
-| Fix drift between `$HOME` and source | [Runbook: recover from drift](runbooks/recover-from-drift.md) |
-| Understand the foundation choices | [Decisions](decisions/index.md) |
-| Skim common questions | [FAQ](faq.md) |
-| See how this compares to other dotfiles repos | [Comparison](comparison.md) |
-| Contribute | [`CONTRIBUTING.md`](https://github.com/edjchapman/dotfiles/blob/main/CONTRIBUTING.md) |
-| Report a vulnerability | [`SECURITY.md`](https://github.com/edjchapman/dotfiles/blob/main/SECURITY.md) |
+| :material-rocket-launch: Bootstrap a Mac | [Runbook: new machine](runbooks/new-machine.md) |
+| :material-key-variant: Rotate a secret or the age key | [Runbook: secret rotation](runbooks/secret-rotation.md) |
+| :material-wrench: Fix drift between `$HOME` and source | [Runbook: recover from drift](runbooks/recover-from-drift.md) |
+| :material-sitemap: Understand the system overview | [Architecture](architecture.md) |
+| :material-format-list-checks: One-page command reference | [Cheatsheet](cheatsheet.md) |
+| :material-alert-decagram: Diagnose an error | [Troubleshooting](troubleshooting.md) |
+| :material-book-alphabet: Terminology | [Glossary](glossary.md) |
+| :material-thought-bubble: Foundation choices | [Decisions](decisions/index.md) |
+| :material-help-circle: Common questions | [FAQ](faq.md) |
+| :material-scale-balance: vs other dotfiles repos | [Comparison](comparison.md) |
+| :material-source-pull: Contribute | [Contributing](contributing.md) |
+| :material-shield-lock: Report a vulnerability | [Security](security.md) |
 
 ## License
 

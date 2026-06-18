@@ -2,6 +2,39 @@
 
 ADRs record the *why* behind the structural choices in this repo. Each is short, dated, and self-contained.
 
+## Dependency graph
+
+```mermaid
+graph TD
+    A["ADR-0001<br/>chezmoi as source of truth"]
+    B["ADR-0002<br/>age encryption"]
+    C["ADR-0003<br/>machine-type templating"]
+    D["ADR-0004<br/>rebrand for public showcase"]
+
+    A --> B
+    A --> C
+    B --> C
+    A --> D
+    B --> D
+    C --> D
+
+    click A "0001-chezmoi-as-source-of-truth.md" "Read ADR-0001"
+    click B "0002-age-encryption.md" "Read ADR-0002"
+    click C "0003-machine-type-templating.md" "Read ADR-0003"
+    click D "0004-rebrand-public-showcase.md" "Read ADR-0004"
+
+    classDef foundation fill:#eef2ff,stroke:#58a6ff,color:#1a1f36
+    classDef encryption fill:#fff5d6,stroke:#a371f7,color:#1a1f36
+    classDef templating fill:#e5f9ee,stroke:#3aa56d,color:#1a1f36
+    classDef showcase fill:#fee5e5,stroke:#d05656,color:#1a1f36
+    class A foundation
+    class B encryption
+    class C templating
+    class D showcase
+```
+
+Each ADR builds on its predecessors: encryption is a chezmoi-native primitive (so 0002 depends on 0001), `machine_type` templating leverages both (so 0003 depends on 0001+0002), and the rebrand decision was deferred until the foundation was mature (so 0004 depends on all three).
+
 ## Index
 
 - [ADR-0001 — chezmoi as the source of truth](0001-chezmoi-as-source-of-truth.md) — why chezmoi over stow, yadm, bare git, or shell scripts.

@@ -1,4 +1,7 @@
 ---
+# Maximalist mkdocs-material config — see /Users/ed/.claude/plans/i-want-to-turbo-charge-twinkly-spindle.md
+# for the rationale behind each feature, plugin, and extension.
+
 site_name: dotfiles
 site_description: >-
     Reproducible, privacy-hardened macOS configuration managed with chezmoi.
@@ -6,16 +9,47 @@ site_description: >-
     self-update PRs, first-class Claude Code integration.
 site_url: https://edjchapman.github.io/dotfiles/
 site_author: Ed Chapman
+copyright: >-
+    Copyright &copy; 2025&ndash;2026 Ed Chapman &middot;
+    <a href="https://github.com/edjchapman/dotfiles/blob/main/LICENSE">MIT License</a>
 
 repo_name: edjchapman/dotfiles
 repo_url: https://github.com/edjchapman/dotfiles
 edit_uri: edit/main/docs/
 
-# Non-strict so the build never fails on cross-PR missing-file refs.
+# Non-strict locally so in-flight cross-PR refs don't break `mkdocs serve`.
+# CI (`.github/workflows/docs.yml` build job) overrides with `mkdocs build --strict`.
 strict: false
+
+# Demote noise from mirror pages (CONTRIBUTING.md etc. reference files outside docs/)
+# from warnings to info so --strict doesn't fail on legitimate root-relative links.
+validation:
+    omitted_files: info
+    absolute_links: relative_to_docs
+    unrecognized_links: info
+    nav:
+        omitted_files: info
+        not_found: warn
+        absolute_links: relative_to_docs
+    links:
+        not_found: info
+        absolute_links: relative_to_docs
+        unrecognized_links: info
+
+# Pages that exist on disk but intentionally not in nav (snippets, includes).
+not_in_nav: |
+    includes/*
+
+# Tell mkdocs to refresh when root mirror sources change (include-markdown).
+watch:
+    - CHANGELOG.md
+    - CONTRIBUTING.md
+    - SECURITY.md
+    - CODE_OF_CONDUCT.md
 
 theme:
     name: material
+    language: en
     palette:
         - media: "(prefers-color-scheme: light)"
           scheme: default
@@ -32,25 +66,122 @@ theme:
               icon: material/brightness-4
               name: Switch to light mode
     features:
+        # Instant navigation + prefetch
         - navigation.instant
+        - navigation.instant.progress
+        - navigation.instant.prefetch
         - navigation.tracking
+        # Top-level tabs (sticky while scrolling) with section grouping
         - navigation.tabs
+        - navigation.tabs.sticky
         - navigation.sections
+        # Breadcrumbs above page title
+        - navigation.path
+        # Faster builds — render only the current section's DOM
+        - navigation.prune
+        # Section landing pages (pairs with mkdocs-section-index plugin)
+        - navigation.indexes
+        # Prev / next pagination footers
+        - navigation.footer
         - navigation.top
+        # Sidebar TOC auto-scrolls with scroll position
+        - toc.follow
+        # Search
         - search.suggest
         - search.highlight
+        - search.share
+        # Dismissable announcement bar
+        - announce.dismiss
+        # Code blocks
         - content.code.copy
+        - content.code.select
+        - content.code.annotate
+        # Source / edit actions in the page header
         - content.action.edit
+        - content.action.view
+        # Linked tabs stay in sync across pages
+        - content.tabs.link
+        # Hover tooltips on abbreviations + footnotes
+        - content.tooltips
+        - content.footnote.tooltips
     font:
         text: Inter
         code: JetBrains Mono
     icon:
+        logo: material/console-line
         repo: fontawesome/brands/github
+        edit: material/pencil
+        view: material/eye
+        admonition:
+            note: material/note-edit
+            abstract: material/clipboard-text
+            info: material/information
+            tip: material/lightbulb
+            success: material/check-circle
+            question: material/help-circle
+            warning: material/alert
+            failure: material/close-circle
+            danger: material/flash
+            bug: material/bug
+            example: material/test-tube
+            quote: material/format-quote-close
 
 plugins:
-    - search
+    - search:
+          lang: en
+          separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+    - glightbox:
+          touchNavigation: true
+          loop: false
+          effect: zoom
+          slide_effect: slide
+          width: 100%
+          height: auto
+          zoomable: true
+          draggable: true
+          skip_classes:
+              - skip-lightbox
+          auto_caption: true
+          caption_position: bottom
+    - section-index
+    - git-revision-date-localized:
+          enable_creation_date: true
+          fallback_to_build_date: true
+          type: timeago
+          timezone: Europe/London
+          locale: en
+          exclude:
+              - includes/*
+    - include-markdown:
+          preserve_includer_indent: true
+          dedent: false
+          comments: false
+          rewrite_relative_urls: true
+    - rss:
+          match_path: "(changelog|decisions/.*)\\.md"
+          date_from_meta:
+              as_creation: date
+          categories:
+              - tags
+    - redirects:
+          redirect_maps: {}
+    - minify:
+          minify_html: true
+          minify_js: true
+          minify_css: true
+          htmlmin_opts:
+              remove_comments: true
+          cache_safe: true
+    - social:
+          cards: true
+          cards_layout_options:
+              background_color: "#1a1f36"
+              color: "#ffffff"
+              font_family: Inter
 
 markdown_extensions:
+    # Base
+    - abbr
     - admonition
     - attr_list
     - def_list
@@ -59,19 +190,57 @@ markdown_extensions:
     - tables
     - toc:
           permalink: true
+          permalink_title: Anchor link to this section
+          toc_depth: 3
+    # pymdown-extensions
+    - pymdownx.betterem
+    - pymdownx.caret
+    - pymdownx.mark
+    - pymdownx.tilde
+    - pymdownx.smartsymbols
+    - pymdownx.saneheaders
+    - pymdownx.critic:
+          mode: view
+    - pymdownx.keys
+    - pymdownx.magiclink:
+          repo_url_shorthand: true
+          social_url_shorthand: true
+          user: edjchapman
+          repo: dotfiles
+    - pymdownx.tasklist:
+          custom_checkbox: true
+          clickable_checkbox: false
     - pymdownx.details
+    - pymdownx.emoji:
+          emoji_index: !!python/name:material.extensions.emoji.twemoji
+          emoji_generator: !!python/name:material.extensions.emoji.to_svg
     - pymdownx.highlight:
           anchor_linenums: true
           line_spans: __span
           pygments_lang_class: true
+          use_pygments: true
+          auto_title: false
     - pymdownx.inlinehilite
-    - pymdownx.snippets
-    - pymdownx.superfences
+    - pymdownx.snippets:
+          base_path:
+              - docs/includes
+              - docs
+              - .
+          auto_append:
+              - includes/abbreviations.md
+          check_paths: true
+    - pymdownx.superfences:
+          custom_fences:
+              - name: mermaid
+                class: mermaid
+                format: !!python/name:pymdownx.superfences.fence_code_format
     - pymdownx.tabbed:
           alternate_style: true
+          combine_header_slug: true
 
 nav:
     - Home: index.md
+    - Architecture: architecture.md
     - Quick start: runbooks/new-machine.md
     - Runbooks:
           - runbooks/index.md
@@ -80,16 +249,43 @@ nav:
           - Recover from drift: runbooks/recover-from-drift.md
           - Brew sync: runbooks/brew-sync.md
           - Branch protection: runbooks/branch-protection.md
+          - Preview deploys: runbooks/preview-deploys.md
     - Decisions:
           - decisions/index.md
           - 0001 — chezmoi as source of truth: decisions/0001-chezmoi-as-source-of-truth.md
           - 0002 — age encryption: decisions/0002-age-encryption.md
           - 0003 — machine-type templating: decisions/0003-machine-type-templating.md
           - 0004 — rebrand for public showcase: decisions/0004-rebrand-public-showcase.md
-    - FAQ: faq.md
-    - Comparison: comparison.md
+    - Reference:
+          - Cheatsheet: cheatsheet.md
+          - Troubleshooting: troubleshooting.md
+          - Gotchas: gotchas.md
+          - Glossary: glossary.md
+          - FAQ: faq.md
+          - Comparison: comparison.md
+    - Project:
+          - Changelog: changelog.md
+          - Contributing: contributing.md
+          - Security: security.md
+          - Code of conduct: code-of-conduct.md
 
 extra:
+    generator: true
     social:
         - icon: fontawesome/brands/github
-          link: https://github.com/edjchapman
+          link: https://github.com/edjchapman/dotfiles
+          name: dotfiles on GitHub
+        - icon: fontawesome/solid/rss
+          link: /feed_rss_created.xml
+          name: RSS feed (new pages)
+    homepage: https://edjchapman.github.io/dotfiles/
+    status:
+        new: Recently added
+        deprecated: No longer maintained
+    tags:
+        Runbook: runbook
+        Decision: decision
+        Reference: reference
+
+extra_css:
+    - stylesheets/extra.css

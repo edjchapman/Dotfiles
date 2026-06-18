@@ -7,6 +7,10 @@ on:
         paths:
             - docs/**
             - mkdocs.yml
+            - CHANGELOG.md
+            - CONTRIBUTING.md
+            - SECURITY.md
+            - CODE_OF_CONDUCT.md
             - .github/workflows/pages.yml
     workflow_dispatch:
 
@@ -26,7 +30,13 @@ jobs:
         steps:
             - uses: actions/checkout@v6
               with:
-                  fetch-depth: 0
+                  fetch-depth: 0  # full history → git-revision-date-localized plugin needs it
+
+            - name: Install Cairo + Pango (for social card imaging, cached)
+              uses: awalsh128/cache-apt-pkgs-action@v1
+              with:
+                  packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
+                  version: 1.0
 
             - uses: actions/setup-python@v6
               with:
@@ -36,11 +46,19 @@ jobs:
 
             - name: Install mkdocs-material
               run: |
-                  python -m pip install --upgrade pip
+                  python -m pip install --upgrade pip setuptools wheel
                   pip install -r docs/requirements.txt
 
-            - name: Build site
-              run: mkdocs build
+            - name: Cache social cards
+              uses: actions/cache@v4
+              with:
+                  path: .cache
+                  key: mkdocs-social-${{ github.sha }}
+                  restore-keys: |
+                      mkdocs-social-
+
+            - name: Build site (strict)
+              run: mkdocs build --strict
 
             - uses: actions/configure-pages@v6
 

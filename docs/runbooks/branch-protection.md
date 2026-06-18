@@ -3,18 +3,69 @@
 The `main` branch is protected so that:
 
 - **Direct pushes are blocked.** All changes go via PR.
-- **All 12 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, `plist XML validation`, and `brew bundle check (macOS)`.
+- **All 13 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, `plist XML validation`, `brew bundle check (macOS)`, and `docs checks passed` (the aggregate of the dedicated docs CI workflow — see [`/.github/workflows/docs.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/docs.yml)).
 - **Branches must be up to date with `main`** before merging (`strict: true`). This forces CI to re-run on the merge candidate, not the stale branch state.
 - **Linear history.** No merge commits — only squash merges.
 - **Conversation resolution required.** Inline review threads must be resolved before merge.
 - **No force pushes**, **no deletions** of `main`.
 - **Admin bypass enabled** (`enforce_admins: false`). You can always merge in emergencies.
 
+!!! warning "Use admin bypass sparingly"
+    `enforce_admins: false` is a fire-escape, not a daily-driver. Bypassing the 13 required checks defeats their purpose. Reserve for genuine emergencies (CI broken in a way that blocks all PRs) and document the reason in the PR description.
+
 Repo-level merge settings reinforce this:
 
 - Squash-merge only (`merge-commit` and `rebase-merge` disabled).
 - Auto-delete branch on merge.
 - Squash commit defaults: title from PR title, message from PR body.
+
+## Check stages
+
+```mermaid
+flowchart LR
+    PR["PR opened / pushed"]
+
+    subgraph LINT["Lint stage"]
+        SC["ShellCheck"]
+        SF["shfmt"]
+        YL["yamllint"]
+        ML["markdownlint"]
+    end
+
+    subgraph SECRET["Secret stage"]
+        GL["gitleaks"]
+        PC["pre-commit (all hooks)"]
+    end
+
+    subgraph TMPL["Template stage"]
+        T1["chezmoi templates<br/>personal/arm64"]
+        T2["chezmoi templates<br/>personal/amd64"]
+        T3["chezmoi templates<br/>work/arm64"]
+        T4["chezmoi templates<br/>work/amd64"]
+    end
+
+    subgraph FMT["Format / validation stage"]
+        PL["plist XML validation"]
+        BB["brew bundle check (macOS)"]
+    end
+
+    subgraph DOCS["Docs stage"]
+        DC["docs checks passed"]
+    end
+
+    GATE["Merge gate<br/>(all 13 required)"]
+
+    PR --> LINT
+    PR --> SECRET
+    PR --> TMPL
+    PR --> FMT
+    PR --> DOCS
+    LINT --> GATE
+    SECRET --> GATE
+    TMPL --> GATE
+    FMT --> GATE
+    DOCS --> GATE
+```
 
 ## Recovering the protection
 
@@ -45,7 +96,8 @@ gh api -X PUT repos/edjchapman/dotfiles/branches/main/protection --input - <<'JS
       "chezmoi templates (work / amd64)",
       "chezmoi templates (work / arm64)",
       "plist XML validation",
-      "brew bundle check (macOS)"
+      "brew bundle check (macOS)",
+      "docs checks passed"
     ]
   },
   "enforce_admins": false,

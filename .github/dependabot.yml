@@ -12,3 +12,20 @@ updates:
       labels:
           - dependencies
           - github-actions
+
+    - package-ecosystem: pip
+      directory: /docs
+      schedule:
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 3
+      commit-message:
+          prefix: chore(docs)
+      labels:
+          - dependencies
+          - docs
+      groups:
+          mkdocs:
+              patterns:
+                  - mkdocs*
+                  - pymdown*

@@ -4,6 +4,40 @@ When you run `brew install`, `brew uninstall`, `brew tap`, `brew untap`, or `mas
 
 The tracked file is never edited behind your back: every change goes through `chezmoi-brew-sync`, which validates the resulting template across the full machine_type × arch matrix before replacing the file.
 
+## Pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant W as brew/mas wrapper<br/>(dot_zshrc)
+    participant R as chezmoi-brew-record
+    participant J as Journal<br/>~/.cache/.../journal.ndjson
+    participant B as Shell banner
+    participant S as chezmoi-brew-sync
+    participant T as Brewfile.tmpl
+
+    U->>W: brew install ffmpeg
+    W->>W: real brew runs
+    W-->>R: async call (preserves exit code)
+    R->>J: append NDJSON event
+    U->>U: new shell session
+    J->>B: read pending count
+    B-->>U: "1 brew event(s) pending"
+    U->>S: chezmoi-brew-sync
+    S->>J: read events
+    S->>S: dedup (install ⨯ uninstall cancel)
+    S->>S: classify (add / remove / skip)
+    U->>S: section + machine_type wrap
+    S->>T: write proposed file
+    S->>S: validate 4 matrix cells
+    S-->>U: diff -u
+    U->>S: confirm
+    S->>T: atomic mv (commit)
+    S->>J: truncate
+    S-->>U: "Journal cleared. Run chezmoi diff."
+```
+
 ## Components
 
 | Piece | Where | What |
@@ -58,19 +92,21 @@ Next: run 'chezmoi diff' then 'chezmoi apply' to install.
 
 ## What `chezmoi-brew-sync` does in detail
 
-1. **Sanity gate** — Requires `chezmoi` and `jq`. Aborts if `Brewfile.tmpl` has uncommitted changes (pass `--force` to stash; never auto-pops).
-2. **Mutex** — `mkdir`-based lock at `~/.cache/chezmoi-brew-inbox/.sync.lock`. Two concurrent syncs cannot race.
-3. **Dedup** — Reads the journal, collapses to the latest event per `(kind, name)`. Install-then-uninstall pairs cancel.
-4. **Classify** — For each resolved event:
-   - `install` + not in file → propose **add**.
-   - `install` + already in file → skip (no-op).
-   - `uninstall` + in file → propose **remove**.
-   - `uninstall` + not in file → skip (no-op).
-5. **Prompt** — For adds: section number + optional `{{ if eq .machine_type "personal" }}` wrap. Section suggestions are seeded by kind (formula → CLI Tools, cask → keyword routing). For removes: confirm yes/no.
-6. **Apply** — Writes proposed edits to a temp file. Insert positions preserve alphabetical order within each section; removes use line-anchored matches so only exact entries are deleted.
-7. **Validate** — Runs `chezmoi execute-template` across all 4 machine_type × arch combos. Aborts with the temp file kept (for inspection) if any combo fails to render.
-8. **Diff** — `diff -u` between live and proposed files.
-9. **Commit** — On `y`, atomic `mv` of the proposed file over the live one, then truncate the journal.
+??? abstract "Step-by-step internals (click to expand)"
+
+    1. **Sanity gate** — Requires `chezmoi` and `jq`. Aborts if `Brewfile.tmpl` has uncommitted changes (pass `--force` to stash; never auto-pops).
+    2. **Mutex** — `mkdir`-based lock at `~/.cache/chezmoi-brew-inbox/.sync.lock`. Two concurrent syncs cannot race.
+    3. **Dedup** — Reads the journal, collapses to the latest event per `(kind, name)`. Install-then-uninstall pairs cancel.
+    4. **Classify** — For each resolved event:
+        - `install` + not in file → propose **add**.
+        - `install` + already in file → skip (no-op).
+        - `uninstall` + in file → propose **remove**.
+        - `uninstall` + not in file → skip (no-op).
+    5. **Prompt** — For adds: section number + optional `{{ if eq .machine_type "personal" }}` wrap. Section suggestions are seeded by kind (formula → CLI Tools, cask → keyword routing). For removes: confirm yes/no.
+    6. **Apply** — Writes proposed edits to a temp file. Insert positions preserve alphabetical order within each section; removes use line-anchored matches so only exact entries are deleted.
+    7. **Validate** — Runs `chezmoi execute-template` across all 4 machine_type × arch combos. Aborts with the temp file kept (for inspection) if any combo fails to render.
+    8. **Diff** — `diff -u` between live and proposed files.
+    9. **Commit** — On `y`, atomic `mv` of the proposed file over the live one, then truncate the journal.
 
 ## Common situations
 

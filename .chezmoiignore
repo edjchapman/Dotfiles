@@ -26,6 +26,10 @@ Brewfile.tmpl
 .markdownlint-cli2.yaml
 .pre-commit-config.yaml
 .yamllint.yaml
+.codespellrc
+.lychee.toml
+.vale.ini
+.vale
 
 # Documentation
 docs
@@ -37,6 +41,9 @@ assets
 
 # bats-core unit tests (run by make test-bats / CI; not deployed to $HOME)
 tests
+
+# Repo helper scripts (pre-commit hooks, CI helpers); not deployed to $HOME.
+scripts
 
 # Runtime cache populated by oh-my-zsh on shell startup — not dotfile state.
 .oh-my-zsh/cache/**

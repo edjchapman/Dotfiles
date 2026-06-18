@@ -9,3 +9,10 @@ bin/
 
 # Per-machine Claude Code overrides
 .claude/settings.local.json
+
+# mkdocs build artefacts and plugin caches
+site/
+.cache/
+
+# Local Python venvs for docs work
+.venv*/

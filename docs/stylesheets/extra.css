@@ -1,0 +1,117 @@
+/* Brand-aligned tweaks layered over mkdocs-material defaults. */
+
+:root {
+    /* Mirror the hero SVG's blue→purple gradient endpoints. */
+    --brand-blue: #58a6ff;
+    --brand-purple: #a371f7;
+}
+
+/* ---------- Mermaid: dark-mode-aware edge color ---------- */
+
+[data-md-color-scheme="default"] .mermaid {
+    --md-mermaid-edge-color: var(--brand-blue);
+    --md-mermaid-label-fg-color: #1a1f36;
+    --md-mermaid-node-bg-color: #eef2ff;
+    --md-mermaid-node-fg-color: #1a1f36;
+}
+
+[data-md-color-scheme="slate"] .mermaid {
+    --md-mermaid-edge-color: var(--brand-purple);
+    --md-mermaid-label-fg-color: #d2d6e0;
+    --md-mermaid-node-bg-color: #2b3148;
+    --md-mermaid-node-fg-color: #f0f3fa;
+}
+
+/* ---------- Long-form runbook headings ---------- */
+
+.md-content h2 {
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+    padding-bottom: 0.3em;
+    margin-top: 2em;
+}
+
+.md-content h3 {
+    margin-top: 1.5em;
+}
+
+/* ---------- Tables ---------- */
+
+.md-typeset table:not([class]) {
+    font-size: 0.78rem;
+}
+
+.md-typeset table:not([class]) th {
+    font-weight: 600;
+    background-color: var(--md-default-fg-color--lightest);
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Zebra stripes on light mode for readability. */
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:nth-child(even) {
+    background-color: #fafbff;
+}
+
+/* ---------- Admonitions ---------- */
+
+.md-typeset .admonition,
+.md-typeset details {
+    border-left-width: 4px;
+}
+
+/* ---------- Code annotations ---------- */
+
+.md-typeset .md-annotation__index > ::before {
+    color: var(--brand-blue);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-annotation__index > ::before {
+    color: var(--brand-purple);
+}
+
+/* ---------- Search highlight ---------- */
+
+.md-typeset mark {
+    background-color: color-mix(in srgb, var(--brand-purple) 30%, transparent);
+}
+
+/* ---------- Nav / sidebar polish ---------- */
+
+.md-nav__title {
+    font-weight: 600;
+}
+
+/* Pinned tabs are subtle on dark mode. */
+[data-md-color-scheme="slate"] .md-tabs {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ---------- Glightbox close button (architecture diagram) ---------- */
+
+.gslide-description {
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+}
+
+/* ---------- Footer credit alignment ---------- */
+
+.md-footer-meta__inner {
+    align-items: center;
+}
+
+/* ---------- Print stylesheet (used by /cheatsheet) ---------- */
+
+@media print {
+    .md-header,
+    .md-tabs,
+    .md-sidebar,
+    .md-footer {
+        display: none !important;
+    }
+    .md-content {
+        margin: 0 !important;
+        max-width: 100% !important;
+    }
+}

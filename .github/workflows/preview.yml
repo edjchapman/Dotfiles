@@ -1,0 +1,172 @@
+---
+# PR preview deploys for the docs site.
+#
+# Builds the docs and pushes them to Cloudflare Pages on every PR. Cloudflare
+# generates a unique preview URL per PR (e.g. https://pr-59.dotfiles.pages.dev)
+# and the workflow comments it on the PR.
+#
+# One-time setup (see docs/runbooks/preview-deploys.md for the full walkthrough):
+#   1. Create a Cloudflare Pages project named `dotfiles` linked to this repo.
+#   2. Add two repo secrets:
+#        CLOUDFLARE_API_TOKEN — Pages:Edit-scoped token
+#        CLOUDFLARE_ACCOUNT_ID — your Cloudflare account ID
+#   3. (Optional) Point a CNAME like docs-preview.example.com at the Pages project.
+#
+# This workflow gracefully skips when the secrets are missing — so it's safe to
+# merge before the secrets are provisioned, and won't break the docs gate.
+
+name: Docs preview
+
+on:
+    pull_request:
+        paths:
+            - docs/**
+            - mkdocs.yml
+            - CHANGELOG.md
+            - CONTRIBUTING.md
+            - SECURITY.md
+            - CODE_OF_CONDUCT.md
+            - .github/workflows/preview.yml
+    workflow_dispatch:
+        inputs:
+            pr_number:
+                description: 'PR number to attach the preview to (for branch alias)'
+                required: true
+                type: string
+
+permissions:
+    contents: read
+    pull-requests: write
+    deployments: write
+
+concurrency:
+    group: preview-${{ github.head_ref }}
+    cancel-in-progress: true
+
+jobs:
+    deploy-preview:
+        name: Build + deploy preview to Cloudflare Pages
+        runs-on: ubuntu-latest
+        # Soft gate — skip fork PRs (no access to secrets). workflow_dispatch
+        # is always allowed since it's triggered by a maintainer.
+        if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+
+            - name: Check Cloudflare secrets
+              id: secrets
+              env:
+                  CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+              run: |
+                  if [[ -z "$CF_TOKEN" || -z "$CF_ACCOUNT" ]]; then
+                      echo "::notice::Cloudflare secrets not configured — skipping preview deploy. See docs/runbooks/preview-deploys.md."
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Install Cairo + Pango for social cards (cached)
+              if: steps.secrets.outputs.skip == 'false'
+              uses: awalsh128/cache-apt-pkgs-action@v1
+              with:
+                  packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
+                  version: 1.0
+
+            - uses: actions/setup-python@v6
+              if: steps.secrets.outputs.skip == 'false'
+              with:
+                  python-version: '3.12'
+                  cache: pip
+                  cache-dependency-path: docs/requirements.txt
+
+            - name: Install dependencies
+              if: steps.secrets.outputs.skip == 'false'
+              run: |
+                  python -m pip install --upgrade pip setuptools wheel
+                  pip install -r docs/requirements.txt
+
+            - name: Override site_url + strip RSS plugin for preview build
+              if: steps.secrets.outputs.skip == 'false'
+              env:
+                  PR_N: ${{ github.event.pull_request.number || inputs.pr_number }}
+                  # Cloudflare appends a 3-char suffix to each project subdomain
+                  # for uniqueness across all customers. The `dotfiles` Pages
+                  # project resolves to https://dotfiles-z7a.pages.dev. Update
+                  # this constant if you rename the subdomain in CF settings.
+                  CF_SUBDOMAIN: dotfiles-z7a
+              run: |
+                  preview_url="https://pr-${PR_N}.${CF_SUBDOMAIN}.pages.dev/"
+                  sed -i.bak "s|^site_url:.*|site_url: ${preview_url}|" mkdocs.yml
+                  rm -f mkdocs.yml.bak
+
+                  # Strip the rss plugin block — it HEAD-fetches every social card
+                  # image to populate <enclosure length="…">. For PRs introducing
+                  # new pages, those images don't exist on the preview URL yet
+                  # (chicken-and-egg: preview must be built before deploy can serve
+                  # the assets), so the fetch returns None and int(None) crashes.
+                  # Production builds keep the plugin; preview builds skip the feed.
+                  python3 - <<'PYEOF'
+                  import re
+                  src = open('mkdocs.yml').read()
+                  # Match `    - rss:` through to the next `    - ` plugin entry.
+                  stripped = re.sub(
+                      r'    - rss:\n(?:        .*\n|          .*\n|              .*\n)*',
+                      '',
+                      src,
+                  )
+                  open('mkdocs.yml', 'w').write(stripped)
+                  PYEOF
+
+                  echo "::notice::Preview site_url set to ${preview_url}, RSS plugin disabled"
+
+            - name: Build site
+              if: steps.secrets.outputs.skip == 'false'
+              run: mkdocs build
+
+            - name: Resolve preview branch alias
+              if: steps.secrets.outputs.skip == 'false'
+              id: alias
+              run: |
+                  pr_n="${{ github.event.pull_request.number || inputs.pr_number }}"
+                  echo "branch=pr-${pr_n}" >> "$GITHUB_OUTPUT"
+
+            - name: Deploy to Cloudflare Pages
+              if: steps.secrets.outputs.skip == 'false'
+              id: deploy
+              uses: cloudflare/wrangler-action@v3
+              with:
+                  apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  command: pages deploy site --project-name=dotfiles --branch=${{ steps.alias.outputs.branch }}
+
+            - name: Find existing preview comment
+              if: steps.secrets.outputs.skip == 'false'
+              uses: peter-evans/find-comment@v3
+              id: fc
+              with:
+                  issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
+                  comment-author: 'github-actions[bot]'
+                  body-includes: '<!-- docs-preview -->'
+
+            - name: Post / update preview URL comment
+              if: steps.secrets.outputs.skip == 'false'
+              uses: peter-evans/create-or-update-comment@v4
+              with:
+                  comment-id: ${{ steps.fc.outputs.comment-id }}
+                  issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
+                  edit-mode: replace
+                  body: |
+                      <!-- docs-preview -->
+                      ## 📄 Docs preview ready
+
+                      | Channel | Link |
+                      |---|---|
+                      | Preview URL | ${{ steps.deploy.outputs.deployment-url }} |
+                      | Commit | `${{ github.event.pull_request.head.sha || github.sha }}` |
+                      | Build log | [Run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+
+                      Built from `${{ github.event.pull_request.head.ref || github.ref_name }}` against `${{ github.event.pull_request.base.ref || 'main' }}`.
+                      This URL updates on every push to the PR.
