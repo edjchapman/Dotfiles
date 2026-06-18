@@ -33,13 +33,19 @@ jobs:
                   fetch-depth: 0  # full history → git-revision-date-localized plugin needs it
 
             - name: Install Cairo + Pango (for social card imaging)
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y \
-                      libcairo2-dev \
-                      libpango1.0-dev \
-                      libgdk-pixbuf2.0-dev \
-                      libffi-dev
+              # Retry on apt mirror flakes.
+              uses: nick-fields/retry@v3
+              with:
+                  timeout_minutes: 5
+                  max_attempts: 3
+                  retry_wait_seconds: 10
+                  command: |
+                      sudo apt-get update
+                      sudo apt-get install -y \
+                          libcairo2-dev \
+                          libpango1.0-dev \
+                          libgdk-pixbuf2.0-dev \
+                          libffi-dev
 
             - uses: actions/setup-python@v6
               with:
