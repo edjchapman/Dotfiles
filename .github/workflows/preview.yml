@@ -68,21 +68,12 @@ jobs:
                       echo "skip=false" >> "$GITHUB_OUTPUT"
                   fi
 
-            - name: Install Cairo + Pango for social cards
+            - name: Install Cairo + Pango for social cards (cached)
               if: steps.secrets.outputs.skip == 'false'
-              # Retry on apt mirror flakes.
-              uses: nick-fields/retry@v3
+              uses: awalsh128/cache-apt-pkgs-action@v1
               with:
-                  timeout_minutes: 5
-                  max_attempts: 3
-                  retry_wait_seconds: 10
-                  command: |
-                      sudo apt-get update
-                      sudo apt-get install -y \
-                          libcairo2-dev \
-                          libpango1.0-dev \
-                          libgdk-pixbuf2.0-dev \
-                          libffi-dev
+                  packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
+                  version: 1.0
 
             - uses: actions/setup-python@v6
               if: steps.secrets.outputs.skip == 'false'
