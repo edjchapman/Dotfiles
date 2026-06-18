@@ -129,7 +129,7 @@ jobs:
               uses: peter-evans/find-comment@v3
               id: fc
               with:
-                  issue-number: ${{ github.event.pull_request.number }}
+                  issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
                   comment-author: 'github-actions[bot]'
                   body-includes: '<!-- docs-preview -->'
 
@@ -138,7 +138,7 @@ jobs:
               uses: peter-evans/create-or-update-comment@v4
               with:
                   comment-id: ${{ steps.fc.outputs.comment-id }}
-                  issue-number: ${{ github.event.pull_request.number }}
+                  issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
                   edit-mode: replace
                   body: |
                       <!-- docs-preview -->
@@ -147,8 +147,8 @@ jobs:
                       | Channel | Link |
                       |---|---|
                       | Preview URL | ${{ steps.deploy.outputs.deployment-url }} |
-                      | Commit | `${{ github.event.pull_request.head.sha }}` |
+                      | Commit | `${{ github.event.pull_request.head.sha || github.sha }}` |
                       | Build log | [Run #${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
 
-                      Built from `${{ github.event.pull_request.head.ref }}` against `${{ github.event.pull_request.base.ref }}`.
+                      Built from `${{ github.event.pull_request.head.ref || github.ref_name }}` against `${{ github.event.pull_request.base.ref || 'main' }}`.
                       This URL updates on every push to the PR.
