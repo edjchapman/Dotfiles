@@ -7,7 +7,9 @@ tags:
 
 # Runbook: PR preview deploys for the docs site
 
-Production deploys to `https://edjchapman.github.io/dotfiles/` via the `pages.yml` workflow. **Per-PR previews** to a unique URL like `https://pr-59.dotfiles.pages.dev` are handled by `preview.yml` via Cloudflare Pages — free, auto-cleaned, comment posted on the PR with the URL.
+Production deploys to `https://edjchapman.github.io/dotfiles/` via the `pages.yml` workflow. **Per-PR previews** to a unique URL like `https://pr-59.dotfiles-z7a.pages.dev` are handled by `preview.yml` via Cloudflare Pages — free, auto-cleaned, comment posted on the PR with the URL.
+
+Cloudflare appends a 3-char suffix (`-z7a`) to the project subdomain for uniqueness across all customers. The exact suffix is hardcoded as `CF_SUBDOMAIN` in `.github/workflows/preview.yml`; update there if you rename the subdomain in CF dashboard → Pages → Settings → Domains.
 
 ## How it works
 

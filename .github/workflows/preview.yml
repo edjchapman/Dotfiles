@@ -95,11 +95,13 @@ jobs:
               if: steps.secrets.outputs.skip == 'false'
               env:
                   PR_N: ${{ github.event.pull_request.number || inputs.pr_number }}
+                  # Cloudflare appends a 3-char suffix to each project subdomain
+                  # for uniqueness across all customers. The `dotfiles` Pages
+                  # project resolves to https://dotfiles-z7a.pages.dev. Update
+                  # this constant if you rename the subdomain in CF settings.
+                  CF_SUBDOMAIN: dotfiles-z7a
               run: |
-                  # Cloudflare serves previews at https://<branch>.<project>.pages.dev.
-                  # Set site_url to the predicted preview URL so canonical/feed/sitemap
-                  # links resolve correctly. mkdocs requires a scheme — `/` is rejected.
-                  preview_url="https://pr-${PR_N}.dotfiles.pages.dev/"
+                  preview_url="https://pr-${PR_N}.${CF_SUBDOMAIN}.pages.dev/"
                   sed -i.bak "s|^site_url:.*|site_url: ${preview_url}|" mkdocs.yml
                   rm -f mkdocs.yml.bak
                   echo "::notice::Preview site_url set to ${preview_url}"
