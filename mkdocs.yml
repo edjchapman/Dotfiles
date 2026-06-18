@@ -7,7 +7,7 @@ site_description: >-
     Reproducible, privacy-hardened macOS configuration managed with chezmoi.
     Matrix-tested templates, age-encrypted secrets, drift detection, weekly
     self-update PRs, first-class Claude Code integration.
-site_url: https://edjchapman.github.io/dotfiles/
+site_url: https://dotfiles.edchapman.co.uk/
 site_author: Ed Chapman
 copyright: >-
     Copyright &copy; 2025&ndash;2026 Ed Chapman &middot;
@@ -164,7 +164,8 @@ plugins:
           categories:
               - tags
     - redirects:
-          redirect_maps: {}
+          redirect_maps:
+              runbooks/preview-deploys.md: runbooks/cloudflare-deploys.md
     - minify:
           minify_html: true
           minify_js: true
@@ -249,7 +250,8 @@ nav:
           - Recover from drift: runbooks/recover-from-drift.md
           - Brew sync: runbooks/brew-sync.md
           - Branch protection: runbooks/branch-protection.md
-          - Preview deploys: runbooks/preview-deploys.md
+          - Cloudflare deploys: runbooks/cloudflare-deploys.md
+          - Custom domain: runbooks/custom-domain.md
     - Decisions:
           - decisions/index.md
           - 0001 — chezmoi as source of truth: decisions/0001-chezmoi-as-source-of-truth.md
@@ -278,7 +280,7 @@ extra:
         - icon: fontawesome/solid/rss
           link: /feed_rss_created.xml
           name: RSS feed (new pages)
-    homepage: https://edjchapman.github.io/dotfiles/
+    homepage: https://dotfiles.edchapman.co.uk/
     status:
         new: Recently added
         deprecated: No longer maintained
