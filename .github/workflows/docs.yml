@@ -27,6 +27,12 @@ on:
 
 permissions:
     contents: read
+    # actions: read is needed so the parallel verify jobs (lychee, htmlproofer,
+    # social-cards-generated, rss-validity, sitemap-completeness, bundle-size)
+    # can `actions/download-artifact` the site/ artifact produced by the build
+    # job. Required for Dependabot PRs — their GITHUB_TOKEN scope is restricted
+    # to exactly what `permissions:` declares.
+    actions: read
 
 concurrency:
     group: docs-${{ github.workflow }}-${{ github.ref }}
