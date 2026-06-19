@@ -53,7 +53,7 @@ jobs:
                   pip install -r docs/requirements.txt
 
             - name: Cache social cards
-              uses: actions/cache@v4
+              uses: actions/cache@v5
               with:
                   path: .cache
                   key: mkdocs-social-${{ github.sha }}
