@@ -144,7 +144,7 @@ jobs:
 
             - name: Find existing preview comment
               if: steps.secrets.outputs.skip == 'false'
-              uses: peter-evans/find-comment@v3
+              uses: peter-evans/find-comment@v4
               id: fc
               with:
                   issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
