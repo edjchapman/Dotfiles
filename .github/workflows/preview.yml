@@ -153,7 +153,7 @@ jobs:
 
             - name: Post / update preview URL comment
               if: steps.secrets.outputs.skip == 'false'
-              uses: peter-evans/create-or-update-comment@v4
+              uses: peter-evans/create-or-update-comment@v5
               with:
                   comment-id: ${{ steps.fc.outputs.comment-id }}
                   issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
