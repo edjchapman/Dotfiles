@@ -39,7 +39,7 @@ jobs:
         outputs:
             page-count: ${{ steps.count.outputs.pages }}
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
             - name: Install Cairo + Pango for social cards (cached)
@@ -76,7 +76,7 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: actions/download-artifact@v8
               with:
                   name: site
@@ -95,7 +95,7 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: actions/download-artifact@v8
               with:
                   name: site
@@ -124,7 +124,7 @@ jobs:
         name: codespell
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: codespell-project/actions-codespell@v2
               with:
                   check_filenames: true
@@ -135,7 +135,7 @@ jobs:
         name: mermaid syntax check
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: actions/setup-node@v6
               with:
                   node-version: '20'
@@ -223,7 +223,7 @@ jobs:
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: actions/download-artifact@v8
               with:
                   name: site

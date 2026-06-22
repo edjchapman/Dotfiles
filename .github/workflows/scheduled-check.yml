@@ -24,7 +24,7 @@ jobs:
         name: make ci (scheduled)
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - name: Install linters

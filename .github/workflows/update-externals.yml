@@ -15,7 +15,7 @@ jobs:
         name: Check pinned externals against upstream
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
 
             - name: Compare oh-my-zsh pin to upstream master
               id: omz
