@@ -189,7 +189,10 @@ BREWUP_LOCK="$HOME/.cache/brewup.lock"
 mkdir -p "$HOME/.cache"
 
 if [[ -d "$BREWUP_LOCK" ]]; then
-  _brewup_lock_mtime=$(stat -f %m "$BREWUP_LOCK" 2>/dev/null || echo 0)
+  # Use the absolute BSD stat: Homebrew coreutils may shadow it on PATH with
+  # GNU stat, whose `-f` means "filesystem mode" and prints a path string that
+  # breaks the arithmetic below ("bad math expression").
+  _brewup_lock_mtime=$(/usr/bin/stat -f %m "$BREWUP_LOCK" 2>/dev/null || echo 0)
   (( $(date +%s) - _brewup_lock_mtime > 3600 )) && rmdir "$BREWUP_LOCK" 2>/dev/null
   unset _brewup_lock_mtime
 fi

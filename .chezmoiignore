@@ -35,6 +35,11 @@ Brewfile.tmpl
 docs
 mkdocs.yml
 
+# Rendered MkDocs build output (`mkdocs build` writes here). It is .gitignore'd,
+# but chezmoi does not honor .gitignore, so without this it would deploy the
+# whole built site to ~/site/. Regenerable artifact — never dotfile state.
+site
+
 # Branding, demo, and architecture assets used by the README and Pages site —
 # committed for review and serving, but never deployed to $HOME.
 assets
