@@ -4,6 +4,14 @@ All notable changes to this repo are recorded here. Format follows [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- Monthly `age-history-scan` audit job (`scripts/check-age-history.sh`): verifies every historical blob of every `*.age` path in git history is valid age ciphertext, enforcing the never-plaintext invariant continuously instead of by one-off review.
+
+### Security
+
+- `SECURITY.md` gains an "Accepted risks" section documenting the public-repo encryption trade-offs (ciphertext metadata visibility, no forward secrecy in age, retired credentials in historical ciphertext) and the 2026-07-02 verification that the retired GitHub PAT is dead.
+
 ## [2.0.1] — 2026-06-23
 
 Maintenance and security patch. Clears a hardcoded credential from the source state, fixes two environment-shadowing bugs, prunes stale Brewfile entries, and absorbs a batch of CI and docs dependency bumps.
