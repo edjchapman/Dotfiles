@@ -25,6 +25,16 @@ Acknowledgement target: within 72 hours. Fix target: depends on severity and exp
 - The age recipient committed in `.chezmoi.toml.tmpl`. The recipient is public by design; only the private key in `~/.config/chezmoi/key.txt` matters for decryption.
 - Anything in `docs/`, `standups/`, `CLAUDE.md`, `AGENTS.md` — non-deployed metadata.
 
+## Accepted risks
+
+Reviewed 2026-07-02. These are known, deliberate trade-offs. Reports that restate them will be closed unless they demonstrate a new escalation path.
+
+- **Ciphertext metadata is public.** Filenames, blob sizes, and commit messages reveal *that* secrets exist, roughly how large they are, and when they change. Accepted: the ciphertext is age (X25519 + ChaCha20-Poly1305), so metadata alone offers no path to the plaintext without the private key.
+- **age has no forward secrecy.** Rotating the recipient key only protects future commits — historical blobs stay bound to the recipient they were encrypted to, forever, in public history. Mitigation policy: when a key is retired, rotate the *underlying credentials* too if there is any doubt about the old key's containment, so historical ciphertext guards nothing of value.
+- **Historical ciphertext contains retired credentials.** A static GitHub PAT lived inside `encrypted_private_dot_zshrc.local.age` until it was replaced by `gh auth token` derivation (v2.0.1). The retired token was revoked, and a liveness probe against the GitHub API (2026-07-02) confirmed it is dead.
+
+The invariant that actually matters — no revision of any `*.age` file was ever plaintext — is enforced monthly by the `age-history-scan` job in `audit.yml` (`scripts/check-age-history.sh`), alongside the full-history gitleaks scan.
+
 ## Secret rotation
 
 If you discover a leaked secret, the rotation procedure is in [`docs/runbooks/secret-rotation.md`](docs/runbooks/secret-rotation.md). It covers:

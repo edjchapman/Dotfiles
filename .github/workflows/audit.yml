@@ -23,6 +23,16 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   GITLEAKS_CONFIG: .gitleaks.toml
 
+    age-history-scan:
+        name: age ciphertext history scan
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+            - name: Verify every historical *.age blob is valid ciphertext
+              run: ./scripts/check-age-history.sh
+
     chezmoi-doctor-smoke:
         name: chezmoi doctor smoke test
         runs-on: ubuntu-latest
