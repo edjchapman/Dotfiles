@@ -2,8 +2,8 @@
 paths:
     - "**/encrypted_*"
     - "**/*.age"
-    - "**/.zshrc.local"
-    - "**/.aws/**"
+    - "**/*.local"
+    - "dot_aws/**"
     - ".chezmoi.toml.tmpl"
     - ".gitleaks.toml"
 ---

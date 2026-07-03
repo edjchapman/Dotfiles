@@ -155,7 +155,7 @@ Together: drift becomes *visible* in seconds and *fixable* with one command. See
 | Layer | What it enforces | Where it lives |
 |---|---|---|
 | Pre-commit | Shellcheck, shfmt, yamllint, markdownlint, gitleaks, ggshield, chezmoi template render, mkdocs config validation, mermaid syntax, docs-nav completeness | [`.pre-commit-config.yaml`](https://github.com/edjchapman/dotfiles/blob/main/.pre-commit-config.yaml) |
-| Push CI | 12 required checks: ShellCheck, shfmt, yamllint, markdownlint, gitleaks, pre-commit, four template matrix cells, plist XML, brew bundle check, docs checks | [`.github/workflows/ci.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/ci.yml), [`docs.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/docs.yml) |
+| Push CI | 13 required checks: ShellCheck, shfmt, yamllint, markdownlint, gitleaks, pre-commit, four template matrix cells, plist XML, brew bundle check, docs checks | [`.github/workflows/ci.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/ci.yml), [`docs.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/docs.yml) |
 | Branch protection | All 13 checks required, linear history, no force-push, no merge commits | [Runbook: branch protection](runbooks/branch-protection.md) |
 | Local apply | `chezmoi verify` — silent if no drift | The `mac` workflow |
 | Daily | LaunchAgent drift check at 09:30 | `~/Library/LaunchAgents/` |
