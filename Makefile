@@ -64,16 +64,28 @@ verify-templates: ## Render every .tmpl across the full machine_type x arch matr
 
 audit: ## Run secret scans (gitleaks + ggshield) and brew bundle check
 	@echo "Running gitleaks..."
-	@command -v gitleaks >/dev/null 2>&1 && gitleaks detect --no-banner --source=. --config=.gitleaks.toml || echo "  (gitleaks not installed — skipping)"
+	@if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --no-banner --source=. --config=.gitleaks.toml; \
+	else \
+		echo "  (gitleaks not installed — skipping)"; \
+	fi
 	@echo ""
 	@echo "Running ggshield..."
-	@command -v ggshield >/dev/null 2>&1 && ggshield secret scan repo . || echo "  (ggshield not installed — skipping)"
+	@if command -v ggshield >/dev/null 2>&1; then \
+		ggshield secret scan repo .; \
+	else \
+		echo "  (ggshield not installed — skipping)"; \
+	fi
 	@echo ""
 	@echo "Running brew bundle check..."
-	@command -v brew >/dev/null 2>&1 && chezmoi execute-template \
-		--init --source="$$(pwd)" \
-		--override-data '{"machine_type":"personal","gpg_signing_key":""}' \
-		< Brewfile.tmpl | brew bundle check --no-upgrade --file=- || echo "  (brew not available — skipping)"
+	@if command -v brew >/dev/null 2>&1; then \
+		chezmoi execute-template \
+			--init --source="$$(pwd)" \
+			--override-data '{"machine_type":"personal","gpg_signing_key":""}' \
+			< Brewfile.tmpl | brew bundle check --no-upgrade --file=-; \
+	else \
+		echo "  (brew not available — skipping)"; \
+	fi
 
 pre-commit-install: ## Install pre-commit framework hooks for this repo
 	@command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit not installed: brew install pre-commit"; exit 1; }
