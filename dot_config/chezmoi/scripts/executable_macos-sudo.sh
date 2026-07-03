@@ -1,10 +1,23 @@
 #!/bin/bash
 # macOS Settings — commands requiring sudo
-# Run manually after chezmoi apply: ~/.config/chezmoi/scripts/macos-sudo.sh
+# Single source of truth for the sudo-settings logic. Invoked once at bootstrap by
+# run_once_after_05-macos-sudo.sh (which execs this file), and re-runnable manually:
+#   ~/.config/chezmoi/scripts/macos-sudo.sh
 
 set -euo pipefail
 
-echo "Applying macOS sudo settings (will prompt for password)..."
+echo ""
+echo "============================================================"
+echo " macOS sudo settings (firewall, Touch ID, energy, updates)"
+echo " This requires your password. Press Ctrl-C to skip."
+echo "============================================================"
+echo ""
+
+# Acquire sudo upfront; skip gracefully if no password is provided (e.g. non-interactive)
+if ! sudo -v; then
+    echo "Skipping sudo settings (no password provided)."
+    exit 0
+fi
 
 # =============================================================================
 # Firewall

@@ -14,9 +14,10 @@ fi
 
 if command -v brew &>/dev/null; then
     echo "Running brew bundle..."
-    chezmoi execute-template < "{{ .chezmoi.sourceDir }}/Brewfile.tmpl" > /tmp/Brewfile.rendered
-    brew bundle --file=/tmp/Brewfile.rendered
-    rm -f /tmp/Brewfile.rendered
+    rendered="$(mktemp -t Brewfile.rendered.XXXXXX)"
+    trap 'rm -f "$rendered"' EXIT
+    chezmoi execute-template < "{{ .chezmoi.sourceDir }}/Brewfile.tmpl" >"$rendered"
+    brew bundle --file="$rendered"
 else
     echo "ERROR: Homebrew not found. Run setup step 01 first."
     exit 1
