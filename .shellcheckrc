@@ -1,0 +1,8 @@
+# Central ShellCheck configuration — the single source of truth for disabled checks.
+# Applies to `make lint`, the pre-commit shellcheck hook, and CI (all invoke shellcheck
+# from the repo root, so this file is picked up automatically).
+#
+# SC1071: ShellCheck only supports sh/bash/dash/ksh; silence "unsupported shell" noise
+#         since we lint every script with `-s bash` regardless of shebang.
+# SC2086: word-splitting is frequently intentional in these scripts.
+disable=SC1071,SC2086

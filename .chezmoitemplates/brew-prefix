@@ -1,0 +1,6 @@
+{{- /*
+Single source of truth for the Homebrew prefix. Reference from any template with:
+    {{ includeTemplate "brew-prefix" . }}
+Renders to /opt/homebrew on Apple Silicon, /usr/local on Intel.
+*/ -}}
+{{- if eq .chezmoi.arch "arm64" }}/opt/homebrew{{ else }}/usr/local{{ end -}}

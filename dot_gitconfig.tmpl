@@ -34,7 +34,7 @@
 	}; f"
 [credential "https://github.com"]
 	helper =
-	helper = !{{ if eq .chezmoi.arch "arm64" }}/opt/homebrew/bin/gh{{ else }}/usr/local/bin/gh{{ end }} auth git-credential
+	helper = !{{ includeTemplate "brew-prefix" . }}/bin/gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
-	helper = !{{ if eq .chezmoi.arch "arm64" }}/opt/homebrew/bin/gh{{ else }}/usr/local/bin/gh{{ end }} auth git-credential
+	helper = !{{ includeTemplate "brew-prefix" . }}/bin/gh auth git-credential
