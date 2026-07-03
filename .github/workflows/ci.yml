@@ -68,23 +68,24 @@ jobs:
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    # Runs the repo-specific hooks (chezmoi render, docs gates, ggshield, codespell,
+    # file hygiene). The five linters that have dedicated parallel jobs above
+    # (shellcheck/shfmt/yamllint/markdownlint/gitleaks) are SKIP-ped here so each runs
+    # once, not twice. Job name kept as-is: it is a required status check in branch
+    # protection (see docs/runbooks/branch-protection.md) — do not rename without also
+    # updating the protection rule.
     pre-commit:
         name: pre-commit (all hooks)
         runs-on: ubuntu-latest
+        env:
+            SKIP: shellcheck-via-make,shfmt,yamllint,markdownlint-cli2,gitleaks
         steps:
             - uses: actions/checkout@v7
             - uses: actions/setup-python@v6
               with:
                   python-version: '3.13'
-            - uses: actions/setup-node@v6
-              with:
-                  node-version: '20'
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
-            - name: Install shellcheck and markdownlint-cli2
-              run: |
-                  sudo apt-get update && sudo apt-get install -y shellcheck
-                  npm install -g markdownlint-cli2
             - uses: pre-commit/action@v3.0.1
 
     bats:
