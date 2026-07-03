@@ -17,6 +17,14 @@ When editing any `.tmpl` file in this repo:
 - `.chezmoi.homeDir` — `$HOME`
 - `.chezmoi.sourceDir` — absolute path to this repo
 
+## Shared partials (`.chezmoitemplates/`)
+
+Snippets reused across templates live in `.chezmoitemplates/` and are pulled in with
+`includeTemplate`. These are the single source of truth — never re-derive their value inline.
+
+- `brew-prefix` — the Homebrew prefix (`/opt/homebrew` on arm64, `/usr/local` on Intel).
+  Use `{{ "{{ includeTemplate \"brew-prefix\" . }}" }}` instead of re-writing the arch conditional.
+
 ## Workflow
 
 1. Edit the `.tmpl` file.
@@ -46,10 +54,17 @@ For a personal-only block (Steam, Tidal, crypto wallets):
 {{ end -}}
 ```
 
-For arch-specific paths (Apple Silicon vs Intel):
+For arch-specific Homebrew paths (Apple Silicon vs Intel), use the shared partial rather
+than re-deriving the prefix:
 
 ```text
-{{ if eq .chezmoi.arch "arm64" }}/opt/homebrew{{ else }}/usr/local{{ end }}
+{{ includeTemplate "brew-prefix" . }}/bin/gh          # → /opt/homebrew/bin/gh or /usr/local/bin/gh
+```
+
+For any other arch branch not covered by a partial:
+
+```text
+{{ if eq .chezmoi.arch "arm64" }}…{{ else }}…{{ end }}
 ```
 
 ## Pitfalls

@@ -4,34 +4,35 @@
 MACHINE_TYPES := personal work
 ARCHES := arm64 amd64
 
+# Shared shell-tooling config (single source of truth). ShellCheck disables live in
+# .shellcheckrc so they don't need repeating here.
+SHFMT_FLAGS := -i 4 -ci -bn
+SH_FILES := $(shell find . -type f \( -name '*.sh' -o -name 'executable_*' \) -not -path './.git/*')
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 lint: ## Run ShellCheck on all .sh, .sh.tmpl, executable_* files
 	@echo "Running ShellCheck..."
-	@find . -name '*.sh' -not -path './.git/*' | while read -r file; do \
+	@find . -type f \( -name '*.sh' -o -name 'executable_*' \) -not -path './.git/*' | while read -r file; do \
 		echo "  $$file"; \
-		shellcheck -s bash -e SC1071,SC2086 "$$file"; \
+		shellcheck -s bash "$$file"; \
 	done
 	@find . -name '*.sh.tmpl' -not -path './.git/*' | while read -r file; do \
 		echo "  $$file (template)"; \
-		sed -E 's/\{\{.*\}\}//g' "$$file" | shellcheck -s bash -e SC1071,SC2086 -; \
-	done
-	@find . -name 'executable_*' -not -path './.git/*' | while read -r file; do \
-		echo "  $$file"; \
-		shellcheck -s bash -e SC1071,SC2086 "$$file"; \
+		sed -E 's/\{\{.*\}\}//g' "$$file" | shellcheck -s bash -; \
 	done
 	@echo "All ShellCheck checks passed."
 
 fmt: ## Format shell scripts in place with shfmt
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not installed: brew install shfmt"; exit 1; }
-	@shfmt -i 4 -ci -bn -w $$(find . -type f \( -name '*.sh' -o -name 'executable_*' \) -not -path './.git/*')
+	@shfmt $(SHFMT_FLAGS) -w $(SH_FILES)
 
 fmt-check: ## Verify shell scripts are formatted (shfmt -d)
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not installed: brew install shfmt"; exit 1; }
 	@echo "Running shfmt -d..."
-	@shfmt -i 4 -ci -bn -d $$(find . -type f \( -name '*.sh' -o -name 'executable_*' \) -not -path './.git/*')
+	@shfmt $(SHFMT_FLAGS) -d $(SH_FILES)
 	@echo "All files formatted correctly."
 
 verify-templates-quick: ## Render every .tmpl once with default data (fast, used by pre-commit)
