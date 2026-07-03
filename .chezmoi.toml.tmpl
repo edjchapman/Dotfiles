@@ -6,6 +6,11 @@ encryption = "age"
 [age]
     identity = "~/.config/chezmoi/key.txt"
     recipient = "age1lmarphzks5yk27tkdcuh9lp0e8dr2w820dqsy409qt5jue92ca0qpalg6h"
+    # ASCII-armor encrypted blobs so `chezmoi add --encrypt` output is consistent and
+    # diff-friendly. Existing binary blobs are re-armored on their next re-encrypt (see
+    # SECURITY.md / secret-rotation runbook); dot_aws/encrypted_private_config.age still
+    # needs a one-off `chezmoi add --encrypt --force ~/.aws/config` to migrate.
+    armor = true
 
 [data]
     machine_type = {{ $machineType | quote }}

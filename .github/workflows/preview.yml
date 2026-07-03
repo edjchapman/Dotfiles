@@ -70,7 +70,7 @@ jobs:
 
             - name: Install Cairo + Pango for social cards (cached)
               if: steps.secrets.outputs.skip == 'false'
-              uses: awalsh128/cache-apt-pkgs-action@v1
+              uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9  # v1
               with:
                   packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
                   version: 1.0
@@ -136,7 +136,7 @@ jobs:
             - name: Deploy to Cloudflare Pages
               if: steps.secrets.outputs.skip == 'false'
               id: deploy
-              uses: cloudflare/wrangler-action@v4
+              uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4
               with:
                   apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -144,7 +144,7 @@ jobs:
 
             - name: Find existing preview comment
               if: steps.secrets.outputs.skip == 'false'
-              uses: peter-evans/find-comment@v4
+              uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad  # v4
               id: fc
               with:
                   issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}
@@ -153,7 +153,7 @@ jobs:
 
             - name: Post / update preview URL comment
               if: steps.secrets.outputs.skip == 'false'
-              uses: peter-evans/create-or-update-comment@v5
+              uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9  # v5
               with:
                   comment-id: ${{ steps.fc.outputs.comment-id }}
                   issue-number: ${{ github.event.pull_request.number || inputs.pr_number }}

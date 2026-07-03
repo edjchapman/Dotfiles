@@ -36,7 +36,7 @@ jobs:
                   fetch-depth: 0  # full history → git-revision-date-localized plugin needs it
 
             - name: Install Cairo + Pango (for social card imaging, cached)
-              uses: awalsh128/cache-apt-pkgs-action@v1
+              uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9  # v1
               with:
                   packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
                   version: 1.0
@@ -65,7 +65,7 @@ jobs:
 
             - name: Deploy to Cloudflare Pages production (branch=main)
               id: deploy
-              uses: cloudflare/wrangler-action@v4
+              uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4
               with:
                   apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
                   accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
