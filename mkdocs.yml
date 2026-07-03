@@ -1,6 +1,6 @@
 ---
-# Maximalist mkdocs-material config — see /Users/ed/.claude/plans/i-want-to-turbo-charge-twinkly-spindle.md
-# for the rationale behind each feature, plugin, and extension.
+# Maximalist mkdocs-material config. Rationale for each feature/plugin/extension is
+# documented inline below and in docs/decisions/ (the ADRs).
 
 site_name: dotfiles
 site_description: >-

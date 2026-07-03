@@ -15,7 +15,7 @@ Read [`CLAUDE.md`](CLAUDE.md) — it's the agent brief, but the same rules apply
 
 ## Local verification
 
-Every PR must pass [12 CI checks](docs/runbooks/branch-protection.md) on `main`. Reproduce them locally before pushing:
+Every PR must pass [13 CI checks](docs/runbooks/branch-protection.md) on `main`. Reproduce them locally before pushing:
 
 ```bash
 make ci          # lint, fmt-check, verify-templates matrix, audit, doctor, verify

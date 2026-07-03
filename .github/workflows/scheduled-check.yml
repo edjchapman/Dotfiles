@@ -8,7 +8,8 @@ name: scheduled-check
 
 on:
     schedule:
-        # Mondays 10:00 UTC — staggered after update-brew (09:00) and update-externals (09:15)
+        # Mondays 10:00 UTC — runs after the Monday-morning update-* workflows
+        # (update-externals 09:15, update-vscode 09:30, update-mas 09:45)
         - cron: '0 10 * * 1'
     workflow_dispatch:
 

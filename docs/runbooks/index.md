@@ -11,7 +11,7 @@ Operational procedures for the day-to-day and infrequent-but-important tasks. Ea
 
 - [New machine bootstrap](new-machine.md) — taking a clean macOS install to fully configured. End-to-end procedure.
 - [Secret rotation](secret-rotation.md) — rotating a single secret (AWS key, GitHub PAT) or the age key itself. Includes "Back up the age key" strategies.
-- [Branch protection](branch-protection.md) — the 12 required CI checks on `main`, how to recreate the protection rules if they're disabled, and how to add new required checks.
+- [Branch protection](branch-protection.md) — the 13 required CI checks on `main`, how to recreate the protection rules if they're disabled, and how to add new required checks.
 
 ## When to write a new runbook
 

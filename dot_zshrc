@@ -81,7 +81,7 @@ if [[ -d /opt/homebrew/opt/mysql@8.4 ]]; then
 fi
 
 # Machine-specific secrets and credentials (AWS, GitHub, Jira, etc.)
-# Managed by chezmoi (encrypted_dot_zshrc.local.age)
+# Managed by chezmoi (encrypted_private_dot_zshrc.local.age)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 
 # Windsurf (only if installed)

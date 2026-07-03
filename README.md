@@ -161,6 +161,7 @@ Nothing auto-merges. Nothing auto-applies to `$HOME`. Updates land as draft PRs 
 
 | | |
 |---|---|
+| [**Live docs site**](https://dotfiles.edchapman.co.uk/) | the full documentation, rendered — runbooks, ADRs, FAQ, glossary |
 | [`docs/runbooks/`](docs/runbooks) | bootstrap, secret rotation, drift recovery, brew sync, branch protection |
 | [`docs/decisions/`](docs/decisions) | architecture decision records (chezmoi, age, machine-type templating, rebrand) |
 | [`docs/faq.md`](docs/faq.md) | common questions about scope, forking, drift, alternatives |
