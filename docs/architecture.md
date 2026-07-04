@@ -101,8 +101,8 @@ The source tree under `/Users/ed/.local/share/chezmoi` follows chezmoi's naming 
 `run_onchange_NAME.sh.tmpl`
 :   Re-runs whenever the rendered content hashes change. Used for Brewfile sync, macOS defaults, Dock layout.
 
-`symlink_NAME.tmpl`
-:   Creates a symlink at `$HOME/NAME` pointing wherever the template renders. Used to alias `~/.claude/` to the separate `claude-code-config` repo.
+`run_onchange_after_NAME.sh`
+:   Re-runs when content changes, *after* all files (and externals) are in place. Used to wire the `~/.claude/*` symlinks into the `claude-code-config` external — a run script rather than `symlink_*` sources because `.chezmoiignore` ignores the `.claude` target path (to keep this repo's project-scoped `.claude/` out of `$HOME`), which excludes anything else chezmoi would deploy there.
 
 ## Render pipeline
 

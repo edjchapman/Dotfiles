@@ -79,7 +79,7 @@ chezmoi execute-template \
 └── run_onchange_*                    # re-runs when content hash changes (Brewfile, defaults, Dock)
 ```
 
-`dot_claude/symlink_*.tmpl` files symlink `~/.claude/{settings.json,agents,commands,rules,skills}` to a separate repo (`claude-code-config`). **Global** Claude Code config lives there. **Project-scoped** config (this file, `.claude/` in this repo) lives here.
+`run_onchange_after_07-claude-global-symlinks.sh` symlinks `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` to a separate repo (`claude-code-config`, cloned by `.chezmoiexternal.toml`) by delegating to that repo's `scripts/setup-global.sh`. A run script is used because `.chezmoiignore` must ignore the target path `.claude` (to keep this repo's project-scoped `.claude/` out of `$HOME`), which rules out `symlink_*` source files for the same target. **Global** Claude Code config lives there. **Project-scoped** config (this file, `.claude/` in this repo) lives here.
 
 ## How to verify a change end-to-end
 

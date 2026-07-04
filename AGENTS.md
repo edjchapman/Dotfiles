@@ -18,7 +18,7 @@ This repo follows the [`agents.md`](https://agents.md/) convention. The full age
 - `.claude/agents/` — chezmoi-specific subagents (template validator, drift reporter).
 - `.claude/commands/` — chezmoi-specific slash commands (`/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`).
 
-Global Claude Code config (general-purpose agents, skills, settings) is symlinked from a separate repo via `dot_claude/symlink_*.tmpl`. Don't duplicate global config here.
+Global Claude Code config (general-purpose agents, skills, settings) is symlinked from a separate repo by `run_onchange_after_07-claude-global-symlinks.sh`. Don't duplicate global config here.
 
 ## Where to look next
 
