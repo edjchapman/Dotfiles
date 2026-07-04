@@ -84,6 +84,7 @@ What this triggers, in order:
 6. Run `run_onchange_04-dock-layout.sh.tmpl` — sets Dock contents via `dockutil`.
 7. Run `run_once_after_05-macos-sudo.sh` — prompts for password, configures firewall, stealth, Touch ID for sudo, energy, auto-updates.
 8. Deploy every `dot_*` file to `$HOME` and decrypt every `encrypted_*` file.
+9. Run `run_onchange_after_07-claude-global-symlinks.sh` — wires `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` as symlinks into the `claude-code-config` clone (delegates to that repo's `scripts/setup-global.sh`).
 
 ### 3. Authenticate tooling
 
