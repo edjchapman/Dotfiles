@@ -10,4 +10,4 @@ mkdocs-minify-plugin==0.8.0
 mkdocs-redirects==1.2.3
 mkdocs-rss-plugin==1.19.0
 mkdocs-section-index==0.3.12
-pymdown-extensions==11.0
+pymdown-extensions==11.0.1
