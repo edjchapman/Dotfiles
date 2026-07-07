@@ -33,7 +33,7 @@ Older render patterns sometimes leave files in `$HOME` that chezmoi no longer tr
 `chezmoi-security-audit` is read-only — it surfaces findings and the recommended fix, but never applies them. Common findings and how to address them:
 
 - **SSH key passphrase missing** — Add interactively: `ssh-keygen -p -f ~/.ssh/<key>`. The repo does not (and will not) automate this. Optionally `ssh-add --apple-use-keychain ~/.ssh/<key>` to load it into the macOS keychain so daily git/ssh isn't friction.
-- **FileVault / SIP / firewall** — usually configured by `run_once_after_05-macos-sudo.sh` at bootstrap. If a finding appears later, re-run that script (it's idempotent) or address via System Settings.
+- **FileVault / SIP / firewall / guest account** — usually configured by `run_once_after_05-macos-sudo.sh` at bootstrap. If a finding appears later, re-run that script (it's idempotent) or address via System Settings.
 - **Sensitive file perms** — fix with `chmod 600 <path>`.
 - **Pending macOS updates** — `softwareupdate -ia` (interactive; may reboot).
 

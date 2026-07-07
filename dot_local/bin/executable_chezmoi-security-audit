@@ -2,9 +2,9 @@
 # chezmoi-security-audit — read-only check of the machine's security baseline.
 #
 # Verifies the protections that run_once_after_05-macos-sudo.sh tries to
-# establish, plus a few ongoing hygiene checks (key permissions, GPG expiry,
-# pending macOS updates). Counts feed into chezmoi-drift-check as
-# SECURITY_DRIFT.
+# establish (FileVault, SIP, firewall, guest account off), plus a few ongoing
+# hygiene checks (key permissions, GPG expiry, pending macOS updates). Counts
+# feed into chezmoi-drift-check as SECURITY_DRIFT.
 #
 # Modes:
 #   (default)  Human report.
@@ -22,8 +22,9 @@ usage() {
     cat <<'EOF'
 chezmoi-security-audit [--drift] [--quiet] [-h]
 
-Checks: FileVault, SIP, firewall+stealth, SSH key passphrase, AWS creds perms,
-age key perms, GPG signing key expiry (if configured), softwareupdate pending.
+Checks: FileVault, SIP, firewall+stealth, guest account, SSH key passphrase,
+AWS creds perms, age key perms, GPG signing key expiry (if configured),
+softwareupdate pending.
 
 Exit codes: 0 clean, 1 drift, 2 audit error.
 EOF
@@ -112,6 +113,18 @@ else
     check "Firewall enabled" skip
     check "Firewall stealth mode" skip
 fi
+
+# ------------------------------------------------------------------------------
+# Guest account — run_once_after_05-macos-sudo.sh disables it on bootstrap, but
+# that wrapper only fires once, so re-check here on every drift run. The
+# loginwindow plist is world-readable, so no sudo is needed to read the state.
+# ------------------------------------------------------------------------------
+guest_enabled=$(defaults read /Library/Preferences/com.apple.loginwindow GuestEnabled 2>/dev/null)
+case "$guest_enabled" in
+    0) check "Guest account disabled" ok ;;
+    1) check "Guest account disabled" fail "guest login enabled — \`sudo defaults write /Library/Preferences/com.apple.loginwindow GuestEnabled -bool false\` (or re-run ~/.config/chezmoi/scripts/macos-sudo.sh)" ;;
+    *) check "Guest account disabled" skip ;;
+esac
 
 # ------------------------------------------------------------------------------
 # SSH private keys — verify each one is passphrase-protected.
