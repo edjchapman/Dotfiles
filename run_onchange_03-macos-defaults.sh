@@ -49,6 +49,25 @@ defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
 # Show warning before changing file extension
 defaults write com.apple.finder FXEnableExtensionChangeWarning -bool true
 
+# Keep folders on top when sorting by name
+defaults write com.apple.finder _FXSortFoldersFirst -bool true
+
+# Search the current folder by default instead of the whole Mac
+defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
+
+# Expand the Save and Print panels by default
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+
+# Don't scatter .DS_Store files on network shares or USB volumes
+defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
+
+# Unhide ~/Library (filesystem flag; re-running just re-clears an already-clear flag)
+chflags nohidden "$HOME/Library" 2>/dev/null || true
+
 # =============================================================================
 # Keyboard
 # =============================================================================
@@ -71,6 +90,13 @@ defaults write NSGlobalDomain NSAutomaticCapitalizationEnabled -bool false
 
 # Disable auto-period with double-space
 defaults write NSGlobalDomain NSAutomaticPeriodSubstitutionEnabled -bool false
+
+# Enable key repeat in every app (disables the press-and-hold accent picker) —
+# essential for editors and Vim-style navigation
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+
+# Full keyboard access: Tab moves between all controls, not just text boxes (default 2)
+defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 
 # =============================================================================
 # Trackpad
@@ -98,9 +124,12 @@ defaults write com.apple.screencapture disable-shadow -bool true
 # Menu Bar Clock
 # =============================================================================
 
-# Show day, date, and time with seconds
+# Show day, date and time in the menu bar (no seconds — cleaner).
+# ShowSeconds is declared explicitly so the source stays authoritative; flip to
+# true if you want a ticking clock.
 defaults write com.apple.menuextra.clock DateFormat -string "EEE d MMM HH:mm"
 defaults write com.apple.menuextra.clock ShowDate -int 1
+defaults write com.apple.menuextra.clock ShowSeconds -bool false
 
 # =============================================================================
 # Privacy & Security (non-sudo)
