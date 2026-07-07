@@ -20,11 +20,8 @@ dockutil --remove all --no-restart
 
 # Add apps in order
 dockutil --add /Applications/Brave\ Browser.app --no-restart
-dockutil --add /Applications/Firefox.app --no-restart
 dockutil --add /Applications/iTerm.app --no-restart
-dockutil --add /Applications/Visual\ Studio\ Code.app --no-restart
 dockutil --add /Applications/Obsidian.app --no-restart
-dockutil --add /Applications/Slack.app --no-restart
 {{ if eq .machine_type "personal" -}}
 dockutil --add /Applications/Tidal.app --no-restart
 {{ end -}}

@@ -30,6 +30,21 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on
 sudo systemsetup -setremoteappleevents off 2>/dev/null || true
 
 # =============================================================================
+# Accounts & disk encryption
+# =============================================================================
+
+# Disable the Guest account
+sudo defaults write /Library/Preferences/com.apple.loginwindow GuestEnabled -bool false
+
+# Assert FileVault is on (report only — never force-enable non-interactively,
+# which would generate a recovery key and force a reboot)
+if fdesetup status | grep -q "FileVault is On"; then
+    echo "FileVault: on."
+else
+    echo "FileVault: OFF — enable it in System Settings > Privacy & Security."
+fi
+
+# =============================================================================
 # Touch ID for sudo
 # =============================================================================
 
@@ -70,4 +85,4 @@ sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyI
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true
 
 echo ""
-echo "Done. Firewall, stealth mode, Touch ID sudo, energy, and auto-updates active."
+echo "Done. Firewall, stealth mode, Guest account off, Touch ID sudo, energy, and auto-updates active."
