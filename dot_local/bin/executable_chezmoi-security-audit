@@ -22,9 +22,9 @@ usage() {
     cat <<'EOF'
 chezmoi-security-audit [--drift] [--quiet] [-h]
 
-Checks: FileVault, SIP, firewall+stealth, guest account, SSH key passphrase,
-AWS creds perms, age key perms, GPG signing key expiry (if configured),
-softwareupdate pending.
+Checks: FileVault, SIP, firewall+stealth, guest account, remote Apple Events,
+SSH key passphrase, AWS creds perms, age key perms, GPG signing key expiry
+(if configured), softwareupdate pending.
 
 Exit codes: 0 clean, 1 drift, 2 audit error.
 EOF
@@ -125,6 +125,21 @@ case "$guest_enabled" in
     1) check "Guest account disabled" fail "guest login enabled — \`sudo defaults write /Library/Preferences/com.apple.loginwindow GuestEnabled -bool false\` (or re-run ~/.config/chezmoi/scripts/macos-sudo.sh)" ;;
     *) check "Guest account disabled" skip ;;
 esac
+
+# ------------------------------------------------------------------------------
+# Remote Apple Events — a legacy remote-AppleScript service that should stay off
+# (macOS default). There is no unprivileged read of systemsetup's flag, so
+# introspect the launchd daemon it toggles (com.apple.AEServer): disabled => off
+# (good), enabled => on (bad). Unknown/unreadable => skip, never a false fail.
+# ------------------------------------------------------------------------------
+rae=$(launchctl print-disabled system 2>/dev/null | grep -i 'com.apple.AEServer')
+if printf '%s' "$rae" | grep -qiE 'AEServer" => (true|disabled)'; then
+    check "Remote Apple Events off" ok
+elif printf '%s' "$rae" | grep -qiE 'AEServer" => (false|enabled)'; then
+    check "Remote Apple Events off" fail "remote AppleScript enabled — \`sudo systemsetup -setremoteappleevents off\` (needs Full Disk Access) or disable via System Settings ➜ General ➜ Sharing"
+else
+    check "Remote Apple Events off" skip
+fi
 
 # ------------------------------------------------------------------------------
 # SSH private keys — verify each one is passphrase-protected.

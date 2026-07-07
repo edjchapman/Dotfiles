@@ -26,8 +26,10 @@ fi
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on
 
-# Disable remote Apple events
-sudo systemsetup -setremoteappleevents off 2>/dev/null || true
+# Remote Apple Events is intentionally NOT enforced here: `systemsetup
+# -setremoteappleevents off` requires Full Disk Access for the calling terminal
+# and silently no-ops without it. It's a legacy feature, off by default; its
+# state is monitored read-only by chezmoi-security-audit instead.
 
 # =============================================================================
 # Accounts & disk encryption
