@@ -13,7 +13,7 @@ flowchart TD
     GPG{"4\. Sign commits?"}
     GPG_E["Existing key"]
     GPG_N["Generate ed25519,<br/>upload to GitHub"]
-    APP["5\. Manual app config<br/>(Brave, Firefox, NordVPN, LuLu, ProtonMail, iTerm2)"]
+    APP["5\. Manual app config<br/>(Brave, NordVPN, LuLu, ProtonMail, iTerm2)"]
     SSH["6\. ln -s Google Drive .ssh"]
     VER["chezmoi verify (silent)"]
 
@@ -119,7 +119,6 @@ aws sso login                  # AWS SSO — default profile
 These can't be templated — they require in-app sign-in or System Settings clicks.
 
 - **Brave** — set as default browser; Shields aggressive; DuckDuckGo; install Dashlane extension.
-- **Firefox** — DuckDuckGo, Dashlane.
 - **NordVPN** — Kill Switch on, NordLynx, Auto-connect, Threat Protection on, Analytics off.
 - **LuLu** — launch once, approve System and Network Extensions.
 - **ProtonMail** — sign in.
