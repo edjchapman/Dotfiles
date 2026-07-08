@@ -132,6 +132,22 @@ defaults write com.apple.menuextra.clock ShowDate -int 1
 defaults write com.apple.menuextra.clock ShowSeconds -bool false
 
 # =============================================================================
+# Menu Bar / Control Center modules
+# =============================================================================
+# NOTE: Control Center module modes are stored PER-HOST, so they require
+# -currentHost. Writing them to the standard domain silently no-ops.
+# Modes: 2 = show in menu bar, 8 = don't show, 18 = always show, 24 = show when active.
+
+# Hide the fast-user-switcher (single-user Mac — menu-bar clutter)
+defaults -currentHost write com.apple.controlcenter UserSwitcher -int 8
+
+# Always show the battery percentage
+defaults -currentHost write com.apple.controlcenter BatteryShowPercentage -bool true
+
+# Show the Sound control only when active
+defaults -currentHost write com.apple.controlcenter Sound -int 24
+
+# =============================================================================
 # Privacy & Security (non-sudo)
 # =============================================================================
 
@@ -177,6 +193,7 @@ defaults write com.googlecode.iterm2 LoadPrefsFromCustomFolder -bool true
 killall Dock 2>/dev/null || true
 killall Finder 2>/dev/null || true
 killall SystemUIServer 2>/dev/null || true
+killall ControlCenter 2>/dev/null || true
 
 echo ""
 echo "macOS defaults applied."
