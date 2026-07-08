@@ -23,6 +23,7 @@ flowchart TD
     BOOT -.->|run_onchange_02-brew-bundle| BOOT
     BOOT -.->|run_onchange_03-macos-defaults| BOOT
     BOOT -.->|run_onchange_04-dock-layout| BOOT
+    BOOT -.->|run_onchange_05-login-items| BOOT
     BOOT -.->|run_once_after_05-macos-sudo| BOOT
     BOOT --> AUTH
     AUTH --> GPG
@@ -80,11 +81,12 @@ What this triggers, in order:
 2. Fetch `oh-my-zsh` (pinned SHA) and `claude-code-config` (HEAD) into `~/.oh-my-zsh` and `~/.config/claude-code-config`.
 3. Run `run_once_01-install-homebrew.sh` — installs Homebrew if absent.
 4. Run `run_onchange_02-brew-bundle.sh.tmpl` — installs every formula, cask, App Store app, and VS Code extension declared in `Brewfile.tmpl`.
-5. Run `run_onchange_03-macos-defaults.sh` — applies all `defaults write` entries (Dock, Finder, keyboard, screenshots, privacy).
+5. Run `run_onchange_03-macos-defaults.sh` — applies all `defaults write` entries (Dock, Finder, keyboard, screenshots, menu bar / Control Center, privacy).
 6. Run `run_onchange_04-dock-layout.sh.tmpl` — sets Dock contents via `dockutil`.
-7. Run `run_once_after_05-macos-sudo.sh` — prompts for password, configures firewall, stealth, Touch ID for sudo, energy, auto-updates, and account hardening (Guest account off, FileVault asserted).
-8. Deploy every `dot_*` file to `$HOME` and decrypt every `encrypted_*` file.
-9. Run `run_onchange_after_07-claude-global-symlinks.sh` — wires `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` as symlinks into the `claude-code-config` clone (delegates to that repo's `scripts/setup-global.sh`).
+7. Run `run_onchange_05-login-items.sh` — reconciles the "Open at Login" set (LuLu, NordVPN, Google Drive, Amphetamine) via System Events. Needs a one-time Automation permission grant for the terminal.
+8. Run `run_once_after_05-macos-sudo.sh` — prompts for password, configures firewall, stealth, Touch ID for sudo, energy, auto-updates, and account hardening (Guest account off, FileVault asserted).
+9. Deploy every `dot_*` file to `$HOME` and decrypt every `encrypted_*` file.
+10. Run `run_onchange_after_07-claude-global-symlinks.sh` — wires `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` as symlinks into the `claude-code-config` clone (delegates to that repo's `scripts/setup-global.sh`).
 
 ### 3. Authenticate tooling
 
