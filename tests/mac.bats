@@ -32,7 +32,7 @@ teardown() {
 
 # Helper: write a state file with named overrides; missing fields default to 0.
 write_state() {
-    local home_drift=0 brew_missing=0 brew_extra=0 defaults_drift=0
+    local home_drift=0 brew_missing=0 brew_extra=0 brew_extra_names="" defaults_drift=0
     local security_drift=0 had_error=0 checked_at summary="drift: clean"
     checked_at=$(date +%s)
     while (($# > 0)); do
@@ -40,6 +40,7 @@ write_state() {
             home=*) home_drift=${1#home=} ;;
             brew_missing=*) brew_missing=${1#brew_missing=} ;;
             brew_extra=*) brew_extra=${1#brew_extra=} ;;
+            extra_names=*) brew_extra_names=${1#extra_names=} ;;
             defaults=*) defaults_drift=${1#defaults=} ;;
             security=*) security_drift=${1#security=} ;;
             error=*) had_error=${1#error=} ;;
@@ -51,6 +52,7 @@ write_state() {
 HOME_DRIFT=$home_drift
 BREW_MISSING=$brew_missing
 BREW_EXTRA=$brew_extra
+BREW_EXTRA_NAMES='$brew_extra_names'
 DEFAULTS_DRIFT=$defaults_drift
 SECURITY_DRIFT=$security_drift
 HAD_ERROR=$had_error
@@ -144,6 +146,14 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Review diff & apply 2 home-file changes"* ]]
     [[ "$output" != *"Preview"* ]]
+}
+
+@test "brew-extra entry offers per-package adopt/uninstall" {
+    write_state brew_extra=2 extra_names='restic foo' summary='drift: brew-extra: 2'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Resolve 2 brew-extra packages"* ]]
+    [[ "$output" == *"adopt into Brewfile / uninstall"* ]]
 }
 
 @test "apply entry names both home and brew-missing counts" {

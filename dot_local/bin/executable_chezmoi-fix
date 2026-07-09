@@ -68,6 +68,7 @@ fi
 HOME_DRIFT=0
 BREW_MISSING=0
 BREW_EXTRA=0
+BREW_EXTRA_NAMES=
 DEFAULTS_DRIFT=0
 SECURITY_DRIFT=0
 HAD_ERROR=0
@@ -126,7 +127,7 @@ if ((${HOME_DRIFT:-0} > 0 || ${BREW_MISSING:-0} > 0)); then
 fi
 
 ((${BREW_EXTRA:-0} > 0)) \
-    && OPTS+=("brew-extra|Investigate ${BREW_EXTRA} brew-extra $(plural "$BREW_EXTRA" package)|brew bundle cleanup --dry-run")
+    && OPTS+=("brew-extra|Resolve ${BREW_EXTRA} brew-extra $(plural "$BREW_EXTRA" package)|adopt into Brewfile / uninstall, per package")
 
 if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
     if ((${DEFAULTS_DRIFT:-0} > 0)); then
@@ -191,19 +192,54 @@ case "$id" in
         echo "apply skipped — re-run chezmoi-fix when ready"
         ;;
     brew-extra)
-        # brew-extra is dangerous to auto-fix; surface the manual recipe instead.
-        # The user almost always wants to ADD the extras to Brewfile.tmpl (via
-        # chezmoi-brew-sync), not uninstall them.
-        rendered=$(mktemp -t brewfile-rendered.XXXXXX)
-        trap 'rm -f "$rendered"' EXIT
-        chezmoi execute-template <"$(chezmoi source-path)/Brewfile.tmpl" >"$rendered" 2>/dev/null
-        echo
-        echo "==> brew bundle cleanup --dry-run (packages not in Brewfile.tmpl):"
-        brew bundle cleanup --file="$rendered" || true
-        echo
-        echo "If you want to keep these — install them through Homebrew first, then run"
-        echo "chezmoi-brew-sync to record them in Brewfile.tmpl. If you want to remove"
-        echo "them, run: brew bundle cleanup --file=$rendered --force"
+        read -r -a extras <<<"${BREW_EXTRA_NAMES:-}"
+        if ((${#extras[@]} == 0)); then
+            # Names unavailable (older cache schema) — surface the manual recipe.
+            rendered=$(mktemp -t brewfile-rendered.XXXXXX)
+            trap 'rm -f "$rendered"' EXIT
+            chezmoi execute-template <"$(chezmoi source-path)/Brewfile.tmpl" >"$rendered" 2>/dev/null
+            echo
+            echo "==> brew bundle cleanup --dry-run (packages not in Brewfile.tmpl):"
+            brew bundle cleanup --file="$rendered" || true
+            echo
+            echo "If you want to keep these — install them through Homebrew first, then run"
+            echo "chezmoi-brew-sync to record them in Brewfile.tmpl. If you want to remove"
+            echo "them, run: brew bundle cleanup --file=$rendered --force"
+            exit 0
+        fi
+        adopted=0
+        for pkg in "${extras[@]}"; do
+            echo
+            read -r -p "${pkg} — [a]dopt into Brewfile / [u]ninstall / [s]kip? [s] " action <"$TTY"
+            case "$action" in
+                a | A)
+                    # Synthesize a journal event; chezmoi-brew-record resolves
+                    # cask vs formula itself, and chezmoi-brew-sync brings its
+                    # section routing, validation, and diff/confirm machinery.
+                    if chezmoi-brew-record --rc 0 --tool brew -- install "$pkg"; then
+                        adopted=$((adopted + 1))
+                        echo "   queued for Brewfile merge: $pkg"
+                    else
+                        echo "   could not record $pkg" >&2
+                    fi
+                    ;;
+                u | U)
+                    read -r -p "   really uninstall ${pkg}? [y/N] " confirm <"$TTY"
+                    if [[ $confirm =~ ^[Yy]$ ]]; then
+                        # Not in Brewfile.tmpl, so there's no journal event to record.
+                        brew uninstall "$pkg" || echo "   uninstall failed: $pkg" >&2
+                    else
+                        echo "   kept $pkg (still unmanaged)"
+                    fi
+                    ;;
+                *) echo "   skipped $pkg" ;;
+            esac
+        done
+        if ((adopted > 0)); then
+            echo
+            read -r -p "Merge ${adopted} adopted $(plural "$adopted" package) into Brewfile.tmpl now? [Y/n] " go <"$TTY"
+            [[ $go =~ ^[Nn]$ ]] || exec chezmoi-brew-sync
+        fi
         ;;
     defaults) exec chezmoi-defaults-audit --drift ;;
     defaults-apply) exec chezmoi-defaults-audit --apply ;;
