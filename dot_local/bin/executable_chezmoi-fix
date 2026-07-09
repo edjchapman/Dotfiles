@@ -126,6 +126,9 @@ if ((${HOME_DRIFT:-0} > 0 || ${BREW_MISSING:-0} > 0)); then
     OPTS+=("apply|${apply_desc}|chezmoi diff, confirm, chezmoi apply")
 fi
 
+((${HOME_DRIFT:-0} > 0)) \
+    && OPTS+=("backup|Back up locally-edited files into the repo|chezmoi re-add, guided per file")
+
 ((${BREW_EXTRA:-0} > 0)) \
     && OPTS+=("brew-extra|Resolve ${BREW_EXTRA} brew-extra $(plural "$BREW_EXTRA" package)|adopt into Brewfile / uninstall, per package")
 
@@ -239,6 +242,53 @@ case "$id" in
             echo
             read -r -p "Merge ${adopted} adopted $(plural "$adopted" package) into Brewfile.tmpl now? [Y/n] " go <"$TTY"
             [[ $go =~ ^[Nn]$ ]] || exec chezmoi-brew-sync
+        fi
+        ;;
+    backup)
+        # Walk each drifted file: show its diff, then choose a direction —
+        # apply (repo wins), re-add (local edit wins), or skip. Templates and
+        # encrypted sources need special routing: re-add would flatten a
+        # rendered template into a literal file, and secrets must round-trip
+        # through age encryption rather than plain re-add.
+        src_dir=$(chezmoi source-path)
+        status_re='^[ ADMR][ ADMR] '
+        readded=()
+        while IFS= read -r line; do
+            [[ $line =~ $status_re ]] || continue
+            rel=${line:3}
+            target="$HOME/$rel"
+            src=$(chezmoi source-path -- "$target" 2>/dev/null || true)
+            echo
+            echo "==> $rel"
+            chezmoi diff -- "$target" || true
+            if [[ ${src:-} == *.tmpl ]]; then
+                echo "   source is a template — 'chezmoi re-add' would flatten it."
+                echo "   To keep the local edit, fold it into: $src"
+                continue
+            fi
+            read -r -p "   [a]pply repo version / [b]ack up my version / [s]kip? [s] " action <"$TTY"
+            case "$action" in
+                a | A)
+                    chezmoi apply -- "$target" && echo "   applied repo version"
+                    ;;
+                b | B)
+                    if [[ $(basename "${src:-unknown}") == encrypted_* ]]; then
+                        chezmoi add --encrypt -- "$target" && readded+=("$rel")
+                    else
+                        chezmoi re-add -- "$target" && readded+=("$rel")
+                    fi
+                    ;;
+                *) echo "   skipped" ;;
+            esac
+        done < <(chezmoi status --exclude=externals 2>/dev/null)
+        if ((${#readded[@]} > 0)); then
+            echo
+            echo "Backed up ${#readded[@]} $(plural "${#readded[@]}" file) into the source repo."
+            echo "main is PR-protected — publish with:"
+            echo "   cd $src_dir"
+            echo "   git checkout -b backup/local-edits"
+            echo "   git add -A && git commit"
+            echo "   git push -u origin backup/local-edits && gh pr create --fill"
         fi
         ;;
     defaults) exec chezmoi-defaults-audit --drift ;;

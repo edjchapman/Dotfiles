@@ -148,6 +148,20 @@ EOF
     [[ "$output" != *"Preview"* ]]
 }
 
+@test "home drift offers a guided backup (re-add) entry" {
+    write_state home=2 summary='drift: home: 2'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Back up locally-edited files into the repo"* ]]
+}
+
+@test "backup entry is absent without home drift" {
+    write_state brew_extra=1 extra_names='restic' summary='drift: brew-extra: 1'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Back up locally-edited"* ]]
+}
+
 @test "brew-extra entry offers per-package adopt/uninstall" {
     write_state brew_extra=2 extra_names='restic foo' summary='drift: brew-extra: 2'
     run "$FIX"
