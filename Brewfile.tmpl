@@ -36,6 +36,7 @@ brew "pre-commit"
 brew "python@3.11"
 brew "python@3.13"
 brew "rclone"
+brew "restic"
 brew "ripgrep"
 brew "rsync"
 brew "ruby"
@@ -73,7 +74,6 @@ brew "bats-core"
 
 # Desktop Apps — Browsers
 cask "brave-browser"
-cask "google-chrome"
 cask "tor-browser"
 
 # Desktop Apps — Dev Tools
@@ -88,7 +88,6 @@ cask "visual-studio-code"
 cask "google-drive"
 cask "microsoft-teams"
 cask "microsoft-word"
-cask "obsidian"
 cask "zoom"
 
 # Desktop Apps — Utilities
@@ -106,9 +105,7 @@ cask "chatgpt"
 
 {{ if eq .machine_type "personal" -}}
 # Desktop Apps — Media & Social
-cask "steam"
 cask "tidal"
-cask "whatsapp"
 
 # Desktop Apps — Crypto
 cask "monero-wallet"
@@ -117,48 +114,3 @@ cask "sparrow"
 
 # Mac App Store (requires signed-in Apple ID)
 mas "Amphetamine", id: 937984704
-
-# VS Code Extensions
-vscode "ahmadalli.vscode-nginx-conf"
-vscode "amazonwebservices.amazon-q-vscode"
-vscode "batisteo.vscode-django"
-vscode "bierner.markdown-mermaid"
-vscode "biomejs.biome"
-vscode "bpruitt-goddard.mermaid-markdown-syntax-highlighting"
-vscode "bradlc.vscode-tailwindcss"
-vscode "chadalen.vscode-jetbrains-icon-theme"
-vscode "charliermarsh.ruff"
-vscode "christian-kohler.npm-intellisense"
-vscode "davidanson.vscode-markdownlint"
-vscode "davidbwaters.macos-modern-theme"
-vscode "dbaeumer.vscode-eslint"
-vscode "dejmedus.tailwind-sorter"
-vscode "dnut.rewrap-revived"
-vscode "docker.docker"
-vscode "donjayamanne.githistory"
-vscode "ecmel.vscode-html-css"
-vscode "github.copilot-chat"
-vscode "github.vscode-github-actions"
-vscode "github.vscode-pull-request-github"
-vscode "golang.go"
-vscode "k--kato.intellij-idea-keybindings"
-vscode "ms-azuretools.vscode-containers"
-vscode "ms-python.debugpy"
-vscode "ms-python.python"
-vscode "ms-python.vscode-pylance"
-vscode "ms-python.vscode-python-envs"
-vscode "ms-toolsai.jupyter"
-vscode "ms-toolsai.jupyter-keymap"
-vscode "ms-toolsai.jupyter-renderers"
-vscode "ms-vscode-remote.remote-containers"
-vscode "ms-vscode.remote-repositories"
-vscode "ms-vscode.vscode-js-profile-flame"
-vscode "mutantdino.resourcemonitor"
-vscode "redhat.vscode-yaml"
-vscode "rokoroku.vscode-theme-darcula"
-vscode "streetsidesoftware.code-spell-checker"
-vscode "streetsidesoftware.code-spell-checker-cspell-bundled-dictionaries"
-vscode "tamasfe.even-better-toml"
-vscode "vitest.explorer"
-vscode "yoavbls.pretty-ts-errors"
-vscode "yzhang.markdown-all-in-one"
