@@ -138,6 +138,29 @@ EOF
     [[ "$output" == *"CHEZMOI_DRIFT_QUIET=1"* ]]
 }
 
+@test "home drift offers a single review-and-apply entry, no standalone diff" {
+    write_state home=2 summary='drift: home: 2'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Review diff & apply 2 home-file changes"* ]]
+    [[ "$output" != *"Preview"* ]]
+}
+
+@test "apply entry names both home and brew-missing counts" {
+    write_state home=1 brew_missing=3 summary='drift: home: 1, brew-missing: 3'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Review diff & apply 1 home-file change + 3 missing brew packages"* ]]
+}
+
+@test "drift-check error prints a remediation hint" {
+    write_state error=1 summary='drift: ERROR: Brewfile.tmpl render failed'
+    run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"verify-templates"* ]]
+    [[ "$output" == *"chezmoi doctor"* ]]
+}
+
 @test "summary written by drift-check has no 'run mac' suffix" {
     # Sanity check on the drift-check script's summary line generator. We don't
     # actually run drift-check (needs chezmoi/brew); we just grep the source.

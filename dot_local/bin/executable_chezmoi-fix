@@ -87,6 +87,8 @@ echo
 echo "==> chezmoi-fix"
 if ((${HAD_ERROR:-0} > 0)); then
     echo "   ${summary:-drift check encountered an error}"
+    echo "   hint: 'make verify-templates' checks template rendering (e.g. a broken"
+    echo "   Brewfile.tmpl kills the brew counts); 'chezmoi doctor' checks the env."
 elif ((total == 0)); then
     echo "   No drift detected. ${summary:-drift: clean}"
     echo "   Nothing to fix."
@@ -112,11 +114,15 @@ has_action=$((fresh_drift_total + inbox_count + ${HAD_ERROR:-0}))
 ((inbox_count > 0)) \
     && OPTS+=("brew-sync|Merge ${inbox_count} brew $(plural "$inbox_count" event) into Brewfile.tmpl|chezmoi-brew-sync")
 
-((${HOME_DRIFT:-0} > 0)) \
-    && OPTS+=("diff|Preview ${HOME_DRIFT} home-file $(plural "$HOME_DRIFT" change)|chezmoi diff")
-
 if ((${HOME_DRIFT:-0} > 0 || ${BREW_MISSING:-0} > 0)); then
-    OPTS+=("apply|Apply pending changes|chezmoi diff, then chezmoi apply")
+    apply_desc="Review diff & apply"
+    ((${HOME_DRIFT:-0} > 0)) \
+        && apply_desc+=" ${HOME_DRIFT} home-file $(plural "$HOME_DRIFT" change)"
+    if ((${BREW_MISSING:-0} > 0)); then
+        ((${HOME_DRIFT:-0} > 0)) && apply_desc+=" +"
+        apply_desc+=" ${BREW_MISSING} missing brew $(plural "$BREW_MISSING" package)"
+    fi
+    OPTS+=("apply|${apply_desc}|chezmoi diff, confirm, chezmoi apply")
 fi
 
 ((${BREW_EXTRA:-0} > 0)) \
@@ -173,7 +179,6 @@ id=${OPTS[$((reply - 1))]%%|*}
 
 case "$id" in
     brew-sync) exec chezmoi-brew-sync ;;
-    diff) exec chezmoi diff ;;
     apply)
         echo
         echo "==> chezmoi diff (review carefully before applying):"
