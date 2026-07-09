@@ -249,7 +249,7 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
       print -P "%F{yellow}chezmoi: drift check encountered an error${_age_suffix} — run 'mac'%f"
       _showed_banner=1
     fi
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary _drift_total _age_suffix
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary _drift_total _age_suffix
   fi
   unset _drift_state
   # Background refresh — only spawn when the cache is missing or older than
