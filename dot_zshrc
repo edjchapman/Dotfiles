@@ -216,7 +216,10 @@ fi
 alias mac='chezmoi-fix'
 alias brewlog='tail -F ~/.cache/brewup.log'
 
-# chezmoi drift banner — surfaces $HOME and Brewfile drift on shell start.
+# chezmoi drift banner — one composed line covering every signal on shell
+# start: home files, brew missing/extra, macOS defaults, security baseline,
+# and pending brew-inbox events. e.g.
+#   chezmoi: home 2 · brew-extra 5 · inbox 3 — run 'mac' (as of 2h ago)
 # Cached state is read synchronously (cheap). A TTL-bounded refresh is kicked
 # off in the background — it only re-runs the full check when the cache is
 # older than $CHEZMOI_DRIFT_TTL (default 4h), otherwise it's a no-op.
@@ -224,34 +227,54 @@ alias brewlog='tail -F ~/.cache/brewup.log'
 # and the daily launchd notification still fires.
 if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
   _drift_state="$HOME/.cache/chezmoi-drift/state"
-  _showed_banner=0
   _cache_age=-1
+  _age_suffix=
+  _parts=
   if [[ -f "$_drift_state" ]]; then
     # shellcheck disable=SC1090
     source "$_drift_state" 2>/dev/null
-    _drift_total=$(( ${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} ))
     # Cache age — used both to gate the background refresh below (avoid one
     # fork per new shell/tmux pane when state is still fresh) and to annotate
     # the banner when the snapshot is materially stale.
-    _age_suffix=
     if [[ "${CHECKED_AT:-0}" =~ ^[0-9]+$ ]] && (( CHECKED_AT > 0 )); then
       _cache_age=$(( $(date +%s) - CHECKED_AT ))
       if (( _cache_age >= 3600 )); then
         _age_suffix=" (as of $(( _cache_age / 3600 ))h ago)"
       fi
     fi
-    if (( _drift_total > 0 )); then
-      _drift_word=things; (( _drift_total == 1 )) && _drift_word=thing
-      print -P "%F{yellow}chezmoi: ${_drift_total} ${_drift_word} need attention${_age_suffix} — run 'mac'%f"
-      unset _drift_word
-      _showed_banner=1
-    elif [[ "${HAD_ERROR:-0}" == "1" ]]; then
-      print -P "%F{yellow}chezmoi: drift check encountered an error${_age_suffix} — run 'mac'%f"
-      _showed_banner=1
-    fi
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary _drift_total _age_suffix
+    (( ${HOME_DRIFT:-0} > 0 ))     && _parts+="${_parts:+ · }home ${HOME_DRIFT}"
+    (( ${BREW_MISSING:-0} > 0 ))   && _parts+="${_parts:+ · }brew-missing ${BREW_MISSING}"
+    (( ${BREW_EXTRA:-0} > 0 ))     && _parts+="${_parts:+ · }brew-extra ${BREW_EXTRA}"
+    (( ${DEFAULTS_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }defaults ${DEFAULTS_DRIFT}"
+    (( ${SECURITY_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }security ${SECURITY_DRIFT}"
+    # A check error is surfaced as its own segment so it is never masked by
+    # (or mistaken for) real drift counts.
+    [[ "${HAD_ERROR:-0}" == "1" ]] && _parts+="${_parts:+ · }check-error"
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary
   fi
   unset _drift_state
+
+  # Pending brew-inbox events join the same line as an 'inbox N' segment.
+  # The count flips the whole banner red at >= 10 so users notice before the
+  # journal merge becomes a chore.
+  _inbox="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson"
+  _inbox_n=0
+  [[ -s $_inbox ]] && _inbox_n=$(wc -l <"$_inbox" | tr -d ' ')
+  (( _inbox_n > 0 )) && _parts+="${_parts:+ · }inbox ${_inbox_n}"
+  unset _inbox
+
+  if [[ -n $_parts ]]; then
+    _color=yellow
+    (( _inbox_n >= 10 )) && _color=red
+    print -P "%F{$_color}chezmoi: ${_parts} — run 'mac'${_age_suffix}%f"
+    unset _color
+  else
+    # Quiet shortcuts tip when nothing fired. Dim grey (%F{8}) so it never
+    # dominates the prompt.
+    print -P "%F{8}tip: 'mac' for chezmoi state · 'brewlog' for today's brew output%f"
+  fi
+  unset _parts _inbox_n _age_suffix
+
   # Background refresh — only spawn when the cache is missing or older than
   # CHEZMOI_DRIFT_TTL (default 4h). The script itself would no-op inside the
   # TTL window, but skipping the fork keeps a fresh tmux session from
@@ -260,28 +283,6 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
     (chezmoi-drift-check --brief --quiet) &>/dev/null &!
   fi
   unset _cache_age
-
-  # brew-inbox banner — surfaces pending events recorded by the brew()/mas()
-  # wrappers. The journal is ephemeral (~/.cache); count flips red at >= 10 so
-  # users notice before it becomes a chore.
-  _inbox="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-brew-inbox/journal.ndjson"
-  if [[ -s $_inbox ]]; then
-    _n=$(wc -l <"$_inbox" | tr -d ' ')
-    _color=yellow
-    (( _n >= 10 )) && _color=red
-    _ev_word=events; (( _n == 1 )) && _ev_word=event
-    print -P "%F{$_color}chezmoi: $_n brew ${_ev_word} pending — run 'mac'%f"
-    unset _n _color _ev_word
-    _showed_banner=1
-  fi
-  unset _inbox
-
-  # Quiet shortcuts tip when nothing else fired. Avoids competing with a
-  # real banner; uses dim grey (%F{8}) so it never dominates the prompt.
-  if (( _showed_banner == 0 )); then
-    print -P "%F{8}tip: 'mac' for chezmoi state · 'brewlog' for today's brew output%f"
-  fi
-  unset _showed_banner
 fi
 
 # brew/mas wrappers — record each mutating invocation to the inbox journal and

@@ -93,7 +93,7 @@ The cache state file (`~/.cache/chezmoi-drift/state`) breaks down as:
 
 | Field | Meaning | Typical fix |
 |---|---|---|
-| `HOME_DRIFT` | N files chezmoi manages differ from source. | `chezmoi diff` → either `chezmoi apply` (source wins) or `chezmoi re-add` (target wins). |
+| `HOME_DRIFT` | N files chezmoi manages differ from source. | `mac` → "Back up locally-edited files" walks each file with a per-file apply/re-add/skip prompt. Manually: `chezmoi diff` → either `chezmoi apply` (source wins) or `chezmoi re-add` (target wins). |
 | `BREW_MISSING` | N entries in `Brewfile.tmpl` not installed locally (typically because something was uninstalled outside the Brewfile flow). | `brew bundle install --file=<(chezmoi execute-template < $(chezmoi source-path)/Brewfile.tmpl)`. |
 | `BREW_EXTRA` | N packages installed locally but not in `Brewfile.tmpl`. | Prefer adding to `Brewfile.tmpl` via `mac` (which dispatches to `chezmoi-brew-sync`); otherwise `brew uninstall`. |
 | `DEFAULTS_DRIFT` | N macOS settings diverge from `run_onchange_03-macos-defaults.sh`. | `chezmoi-defaults-audit --apply` re-asserts source values (useful after a macOS upgrade reset settings). |
@@ -115,6 +115,10 @@ Three possible causes per file:
 | Both changed | A merge — both source and target diverged from the last apply. | Inspect both versions, decide manually. |
 
 ## Resolve, file by file
+
+The guided path is `mac` → "Back up locally-edited files into the repo": it shows each drifted file's diff and prompts apply / re-add / skip per file. Template-backed targets are routed to their source `.tmpl` (re-add would flatten them) and encrypted sources go through `chezmoi add --encrypt` automatically. After any re-adds it prints the branch/commit/PR follow-through (main is PR-protected).
+
+Manually:
 
 ```bash
 # Pull source-side changes into $HOME (target loses):

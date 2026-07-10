@@ -33,6 +33,9 @@ chezmoi-drift-check [--brief|--full] [--notify|--alert] [--quiet]
             chezmoi-fix in iTerm. Auto-dismisses after 90 seconds. Implies --notify is not used.
   --quiet   Suppress stdout; exit code only.
 
+  --parse-cleanup   Test hook: read `brew bundle cleanup` dry-run output on stdin,
+                    print "<count>\t<space-joined names>" and exit. No checks run.
+
 Exit codes: 0 clean, 1 drift, 2 error (a check could not be run).
 State cache: $XDG_CACHE_HOME/chezmoi-drift/state (or ~/.cache/...).
 EOF
@@ -42,6 +45,7 @@ for arg in "$@"; do
     case "$arg" in
         --brief) MODE=brief ;;
         --full) MODE=full ;;
+        --parse-cleanup) MODE=parse-cleanup ;;
         --notify) NOTIFY=1 ;;
         --alert) ALERT=1 ;;
         --quiet) QUIET=1 ;;
@@ -58,6 +62,30 @@ for arg in "$@"; do
 done
 
 emit() { [[ $QUIET -eq 0 ]] && printf '%s\n' "$*"; }
+
+# Parse `brew bundle cleanup` dry-run output into one package/tap name per line.
+# Modern brew prints block form — a `Would uninstall formulae:` / `... casks:` /
+# `Would untap:` header followed by one bare name per line — while older brew
+# printed inline form (`Would uninstall foo`). Cache cleanups
+# (`Would remove: /path/…`) are not packages and are skipped in both forms.
+parse_cleanup_names() {
+    awk '
+        /^Would (uninstall|remove|untap).*:$/ { collecting = 1; next }
+        /^Would / { collecting = 0 } # a new directive ends the block; inline rules below decide
+        collecting && (/^[[:space:]]*$/ || /^Run `brew/) { collecting = 0; next }
+        collecting { if ($1 !~ /^\//) print $1; next }
+        /^Would (uninstall|untap) [^:]/ { print $3 }
+        /^Would remove [^:\/]/ { print $3 }
+    '
+}
+
+if [[ $MODE == "parse-cleanup" ]]; then
+    names=$(parse_cleanup_names)
+    count=0
+    [[ -n $names ]] && count=$(printf '%s\n' "$names" | wc -l | tr -d ' ')
+    printf '%s\t%s\n' "$count" "$(printf '%s' "$names" | tr '\n' ' ' | sed 's/ $//')"
+    exit 0
+fi
 
 if ! command -v chezmoi >/dev/null 2>&1; then
     emit "chezmoi-drift-check: chezmoi not installed; skipping"
@@ -117,6 +145,7 @@ fi
 HOME_DRIFT=0
 BREW_MISSING=0
 BREW_EXTRA=0
+BREW_EXTRA_NAMES=""
 DEFAULTS_DRIFT=0
 SECURITY_DRIFT=0
 HAD_ERROR=0
@@ -159,8 +188,15 @@ if command -v brew >/dev/null 2>&1; then
         cleanup_out=$(brew bundle cleanup --file="$rendered" 2>&1)
         cleanup_rc=$?
         # `Would remove: /path/...` lines are routine brew cache cleanups, not
-        # unmanaged packages — accept package-style `Would remove <name>` only.
-        BREW_EXTRA=$(printf '%s\n' "$cleanup_out" | grep -cE '^Would (uninstall|untap) |^Would remove [^:/]' || true)
+        # unmanaged packages. parse_cleanup_names handles both the modern block
+        # output (header + one name per line) and the legacy inline form —
+        # counting the header lines themselves used to under-report extras.
+        extra_names=$(printf '%s\n' "$cleanup_out" | parse_cleanup_names)
+        if [[ -n $extra_names ]]; then
+            BREW_EXTRA=$(printf '%s\n' "$extra_names" | wc -l | tr -d ' ')
+            BREW_EXTRA_NAMES=$(printf '%s' "$extra_names" | tr '\n' ' ')
+            BREW_EXTRA_NAMES=${BREW_EXTRA_NAMES% }
+        fi
         if [[ $cleanup_rc -ne 0 && $BREW_EXTRA -eq 0 ]]; then
             HAD_ERROR=1
             err_parts="${err_parts:+$err_parts; }brew bundle cleanup failed"
@@ -222,6 +258,7 @@ if {
     printf 'HOME_DRIFT=%s\n' "$HOME_DRIFT"
     printf 'BREW_MISSING=%s\n' "$BREW_MISSING"
     printf 'BREW_EXTRA=%s\n' "$BREW_EXTRA"
+    printf 'BREW_EXTRA_NAMES=%q\n' "$BREW_EXTRA_NAMES"
     printf 'DEFAULTS_DRIFT=%s\n' "$DEFAULTS_DRIFT"
     printf 'SECURITY_DRIFT=%s\n' "$SECURITY_DRIFT"
     printf 'HAD_ERROR=%s\n' "$HAD_ERROR"
