@@ -35,7 +35,7 @@ $ mac
 No drift detected.
 ```
 
-When something is out of sync, `mac` summarises what changed and offers a one-keystroke remediation menu. The same check runs at every shell startup as a banner, and again at 09:30 daily as a clickable macOS notification.
+When something is out of sync, `mac` summarises what changed and offers a one-keystroke remediation menu — review-and-apply with a single confirm, a guided per-file backup of locally-edited files, and per-package adopt/uninstall for brew packages installed outside the Brewfile. The same check runs at every shell startup as a one-line banner naming each signal (`chezmoi: home 2 · brew-extra 5 — run 'mac'`), and again at 09:30 daily as a clickable macOS notification.
 
 A rendered terminal recording lives at `assets/demo/bootstrap.gif` (source: [`assets/demo/bootstrap.tape`](assets/demo/bootstrap.tape) — render with `brew install vhs && vhs assets/demo/bootstrap.tape`).
 
@@ -64,7 +64,7 @@ Every `.tmpl` is rendered against four `(machine_type, arch)` combinations on ev
 
 ### Drift detection + `mac`
 
-A shell-startup banner runs the drift check on every new terminal; a LaunchAgent fires the same check at 09:30 daily as a clickable notification. `mac` is the one alias to call when anything is flagged — it summarises and walks you through fixing each source of drift.
+A shell-startup banner runs the drift check on every new terminal; a LaunchAgent fires the same check at 09:30 daily as a clickable notification. `mac` is the one alias to call when anything is flagged — it walks each source of drift in both directions: apply the repo's version, or back a local edit up into the repo (`re-add`, with templates and encrypted secrets routed safely). Unmanaged brew packages get a per-package adopt-or-uninstall prompt that feeds the Brewfile merge machinery.
 
 [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md)
 
@@ -138,7 +138,13 @@ Longer per-repo notes are in [`docs/comparison.md`](docs/comparison.md). Suggest
 | Pull updates from another machine | `chezmoi update` |
 | Inspect today's brew upgrade output | `brewlog` |
 
-`mac` is the one entry point for anything the system has flagged. It refreshes the drift check, summarises what's pending across home files, brew packages, macOS defaults, and security baseline, then walks you through fixing it. If nothing is wrong it says so and exits.
+`mac` is the one entry point for anything the system has flagged. It refreshes the drift check, summarises what's pending across home files, brew packages, macOS defaults, and security baseline, then walks you through fixing it — in whichever direction is right per item:
+
+- **Review diff & apply** — pages the full diff, one confirm, source wins.
+- **Back up locally-edited files** — per-file diff then apply / re-add / skip; targets backed by a template are routed to the source `.tmpl` (re-add would flatten them) and secrets go through `chezmoi add --encrypt`. Ends with the branch-and-PR steps to publish.
+- **Resolve brew extras** — each package installed outside the Brewfile gets adopt / uninstall / skip; adopting queues a journal event and hands off to the interactive Brewfile merge.
+
+If nothing is wrong it says so and exits.
 
 </details>
 
