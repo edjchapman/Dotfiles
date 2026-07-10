@@ -252,7 +252,7 @@ case "$id" in
         # through age encryption rather than plain re-add.
         src_dir=$(chezmoi source-path)
         status_re='^[ ADMR][ ADMR] '
-        readded=()
+        backed_up=()
         while IFS= read -r line; do
             [[ $line =~ $status_re ]] || continue
             rel=${line:3}
@@ -273,17 +273,17 @@ case "$id" in
                     ;;
                 b | B)
                     if [[ $(basename "${src:-unknown}") == encrypted_* ]]; then
-                        chezmoi add --encrypt -- "$target" && readded+=("$rel")
+                        chezmoi add --encrypt -- "$target" && backed_up+=("$rel")
                     else
-                        chezmoi re-add -- "$target" && readded+=("$rel")
+                        chezmoi re-add -- "$target" && backed_up+=("$rel")
                     fi
                     ;;
                 *) echo "   skipped" ;;
             esac
         done < <(chezmoi status --exclude=externals 2>/dev/null)
-        if ((${#readded[@]} > 0)); then
+        if ((${#backed_up[@]} > 0)); then
             echo
-            echo "Backed up ${#readded[@]} $(plural "${#readded[@]}" file) into the source repo."
+            echo "Backed up ${#backed_up[@]} $(plural "${#backed_up[@]}" file) into the source repo."
             echo "main is PR-protected — publish with:"
             echo "   cd $src_dir"
             echo "   git checkout -b backup/local-edits"
