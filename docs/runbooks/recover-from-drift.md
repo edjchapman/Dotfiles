@@ -152,7 +152,7 @@ chezmoi apply --refresh-externals              # actually fetch
 
 The weekly `update-externals.yml` workflow opens a PR if upstream has moved past the pinned SHA. If you need an immediate refresh (e.g. a security patch in `oh-my-zsh`), bump the SHA in `.chezmoiexternal.toml` and PR it manually.
 
-Note that `update-externals.yml` only PRs the `oh-my-zsh` SHA. `claude-code-config` is a `git-repo` external that self-updates at apply time (`refreshPeriod = "168h"`, `rebase = true`); no PR ever appears for it.
+Note that `update-externals.yml` only PRs the `oh-my-zsh` SHA — the only chezmoi external. `claude-code-config` is a working clone at `~/Development/claude-code-config` updated through its own git workflow; no PR ever appears for it.
 
 ## When a self-update workflow runs but no PR appears
 

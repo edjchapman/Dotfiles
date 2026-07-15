@@ -30,7 +30,7 @@ $ mac
   ✓ Brewfile             in sync
   ✓ macOS defaults       in sync
   ✓ security baseline    in sync (FileVault, SIP, firewall, keys, perms)
-  ✓ external pins        in sync (oh-my-zsh, claude-code-config)
+  ✓ external pins        in sync (oh-my-zsh)
 
 No drift detected.
 ```
@@ -84,7 +84,7 @@ Secrets live in the repo as `*.age` blobs encrypted to a single recipient. Pre-c
 
 ### Weekly self-update PRs for pinned externals
 
-`oh-my-zsh` is pinned by SHA. A weekly workflow checks for upstream commits, bumps the pin, and opens a draft PR you review like any other change. The `claude-code-config` external rebases locally at apply time with a 168-hour refresh window.
+`oh-my-zsh` is pinned by SHA. A weekly workflow checks for upstream commits, bumps the pin, and opens a draft PR you review like any other change. (`claude-code-config` is not an external — it's an actively-developed working clone at `~/Development/claude-code-config`, updated through its own git workflow.)
 
 [`.chezmoiexternal.toml`](.chezmoiexternal.toml)
 

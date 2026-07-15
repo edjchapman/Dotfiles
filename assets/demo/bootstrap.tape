@@ -37,7 +37,7 @@ Type "  ✓ macOS defaults       in sync"
 Enter
 Type "  ✓ security baseline    in sync (FileVault, SIP, firewall, keys, perms)"
 Enter
-Type "  ✓ external pins        in sync (oh-my-zsh, claude-code-config)"
+Type "  ✓ external pins        in sync (oh-my-zsh)"
 Enter
 Type ""
 Enter
