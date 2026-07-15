@@ -31,7 +31,7 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 | Add a NEW file as encrypted | `chezmoi add --encrypt <path>` |
 | Open source-tree directory | `chezmoi cd` |
 | Run init prompts again | `chezmoi init --apply edjchapman` |
-| Force-refresh externals (oh-my-zsh, claude-code-config) | `chezmoi apply --refresh-externals` |
+| Force-refresh externals (oh-my-zsh) | `chezmoi apply --refresh-externals` |
 | Show data accessible to templates | `chezmoi data` |
 | Test-render a single template | `chezmoi execute-template < some_file.tmpl` |
 | State DB inspection | `chezmoi state dump` |

@@ -1,12 +1,17 @@
 #!/bin/bash
 # Global Claude Code config — symlink ~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}
-# into the claude-code-config external (cloned to ~/.config/claude-code-config by .chezmoiexternal.toml).
+# into the claude-code-config working clone at ~/Development/claude-code-config.
 #
-# chezmoi run_onchange_after: runs after the external is in place, on first apply of a fresh
-# machine and again whenever this file changes. (A plain run_after would self-heal on every
-# apply, but shows as a perpetual pending "R" line in `chezmoi status`, tripping the drift
-# banner.) The actual symlinking is delegated to the config repo's own scripts/setup-global.sh
-# (single source of truth); this wrapper only invokes it when a link is missing or wrong.
+# The repo is an actively-developed checkout, NOT a chezmoi external: a git-repo external
+# would `git pull --rebase` into the working tree at apply time and fail whenever it is
+# dirty. Updates flow through the normal git workflow in that repo; this script only
+# bootstraps a clone on a fresh machine and keeps the symlinks wired.
+#
+# chezmoi run_onchange_after: runs on first apply of a fresh machine and again whenever
+# this file changes. (A plain run_after would self-heal on every apply, but shows as a
+# perpetual pending "R" line in `chezmoi status`, tripping the drift banner.) The actual
+# symlinking is delegated to the config repo's own scripts/setup-global.sh (single source
+# of truth); this wrapper only invokes it when a link is missing or wrong.
 # To repair broken symlinks between content changes, run setup-global.sh directly.
 #
 # Why a run script and not dot_claude/symlink_* sources: .chezmoiignore must ignore the target
@@ -15,11 +20,16 @@
 
 set -euo pipefail
 
-repo="$HOME/.config/claude-code-config"
+repo="$HOME/Development/claude-code-config"
 setup="$repo/scripts/setup-global.sh"
 
+if [[ ! -d "$repo/.git" ]]; then
+    echo "claude-code-config not found at $repo — cloning." >&2
+    git clone https://github.com/edjchapman/claude-code-config.git "$repo"
+fi
+
 if [[ ! -x "$setup" ]]; then
-    echo "claude-code-config external not present at $repo — skipping ~/.claude symlinks." >&2
+    echo "claude-code-config present but $setup missing or not executable — skipping ~/.claude symlinks." >&2
     exit 0
 fi
 

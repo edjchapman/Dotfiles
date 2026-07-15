@@ -25,18 +25,14 @@ If you change the recipient, every `*.age` file must be re-encrypted (see [`docs
 
 External archives and git repos pulled in at apply time:
 
-- `oh-my-zsh` — pinned commit SHA, refreshed weekly
-- `claude-code-config` — git-repo external (`rebase = true`, `refreshPeriod = "168h"`)
+- `oh-my-zsh` — pinned commit SHA, refreshed weekly. To bump it, replace the SHA. The
+  weekly `update-externals.yml` workflow opens a draft PR doing this automatically.
 
-These two externals update through **different channels**:
-
-- **`oh-my-zsh`** is SHA-pinned. To bump it, replace the SHA. The weekly
-  `update-externals.yml` workflow opens a draft PR doing this automatically.
-- **`claude-code-config`** is *not* PR'd by any workflow. It tracks its upstream `main` and
-  self-updates **locally at apply time** (`git pull --rebase`, at most every 168h) — there
-  is no draft PR and no SHA to bump. Force an immediate refresh with
-  `chezmoi apply --refresh-externals`. This asymmetry is intentional: you own that repo, so
-  the update channel is `git pull`, not review-a-PR.
+`claude-code-config` is **not** an external. It's an actively-developed working clone at
+`~/Development/claude-code-config` — a git-repo external would `git pull --rebase` into
+the working tree at apply time and fail whenever it's dirty. It's bootstrapped (cloned if
+missing) and symlinked into `~/.claude/` by `run_onchange_after_07-claude-global-symlinks.sh`;
+updates flow through the normal git workflow in that repo.
 
 ## `.chezmoiignore` — what stays in source
 

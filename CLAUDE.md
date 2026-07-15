@@ -70,7 +70,7 @@ chezmoi execute-template \
 ├── .github/workflows/                # ci.yml, update-*.yml, audit.yml
 ├── Makefile                          # `make help` lists targets (not deployed)
 ├── .chezmoi.toml.tmpl                # init prompts: machine_type, gpg key
-├── .chezmoiexternal.toml             # pinned externals: oh-my-zsh, claude-code-config
+├── .chezmoiexternal.toml             # pinned externals: oh-my-zsh
 ├── .chezmoiignore                    # what stays in source, never deployed
 ├── Brewfile.tmpl                     # consumed by run_onchange_02, not deployed directly
 ├── dot_*                             # files deployed to $HOME (e.g. dot_zshrc → ~/.zshrc)
@@ -79,7 +79,7 @@ chezmoi execute-template \
 └── run_onchange_*                    # re-runs when content hash changes (Brewfile, defaults, Dock)
 ```
 
-`run_onchange_after_07-claude-global-symlinks.sh` symlinks `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` to a separate repo (`claude-code-config`, cloned by `.chezmoiexternal.toml`) by delegating to that repo's `scripts/setup-global.sh`. A run script is used because `.chezmoiignore` must ignore the target path `.claude` (to keep this repo's project-scoped `.claude/` out of `$HOME`), which rules out `symlink_*` source files for the same target. **Global** Claude Code config lives there. **Project-scoped** config (this file, `.claude/` in this repo) lives here.
+`run_onchange_after_07-claude-global-symlinks.sh` symlinks `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` to a separate repo (`claude-code-config`, an actively-developed working clone at `~/Development/claude-code-config`; the script clones it there on a fresh machine) by delegating to that repo's `scripts/setup-global.sh`. A run script is used because `.chezmoiignore` must ignore the target path `.claude` (to keep this repo's project-scoped `.claude/` out of `$HOME`), which rules out `symlink_*` source files for the same target. **Global** Claude Code config lives there. **Project-scoped** config (this file, `.claude/` in this repo) lives here.
 
 ## How to verify a change end-to-end
 
@@ -147,5 +147,5 @@ The user-facing summary is in [`README.md`](README.md) under "What runs automati
 - Every commit runs shellcheck, shfmt, yamllint, markdownlint, gitleaks, ggshield via `.pre-commit-config.yaml` + a local `make verify-templates` hook.
 - Every push runs the same checks plus a 4-cell template matrix and a macOS `brew bundle check` in CI (`.github/workflows/ci.yml`).
 - Weekly draft PR from `update-externals.yml`; monthly full-history scan from `audit.yml`. **Nothing auto-merges. Nothing auto-applies.** Brew currency is tracked on the live machine by the daily `brewup` background task, not in CI — a fresh runner has no installed-version state to compare against.
-- `update-externals.yml` only PRs the `oh-my-zsh` SHA pin. The other external — `claude-code-config` — is a `git-repo` external with `rebase = true` and `refreshPeriod = "168h"` in `.chezmoiexternal.toml`, so it self-updates **locally** at apply time (`git pull --rebase` against its upstream main), not via a PR. That's intentional: you control that repo, so the update channel is `git pull`, not Dependabot-style review. To force an immediate refresh on the live machine: `chezmoi apply --refresh-externals`.
+- `update-externals.yml` PRs the `oh-my-zsh` SHA pin — the only chezmoi external. `claude-code-config` is **not** an external: it's an actively-developed working clone at `~/Development/claude-code-config` (bootstrapped by `run_onchange_after_07` on a fresh machine), and updates flow through the normal git workflow in that repo — a git-repo external would `git pull --rebase` into a dirty working tree at apply time and fail.
 - On the live machine: `mac` (= `chezmoi-fix`) is the user-facing remediation entry point. Its menu covers every drift direction: **apply** (source wins — diff paged, single confirm), **backup** (target wins — walks each drifted file with apply / re-add / skip; template-backed targets are routed to their source `.tmpl` and secrets go through `chezmoi add --encrypt`), and **brew-extra resolution** (per-package adopt-into-Brewfile / uninstall / skip; adopt synthesizes a journal event via `chezmoi-brew-record` and hands off to `chezmoi-brew-sync`). The shell banner is a single line naming each firing signal (`chezmoi: home 2 · brew-extra 5 · inbox 3 — run 'mac'`); the drift state file carries `BREW_EXTRA_NAMES` alongside the counts. The full helper set (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi-brew-record`) remains on PATH for power use. The daily `brewup` background task (in `dot_zshrc`) appends to `~/.cache/brewup.log`. See [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md).

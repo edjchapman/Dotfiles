@@ -27,7 +27,7 @@ flowchart LR
         RENDER["Render templates<br/>(machine_type, arch)"]
         DECRYPT["Decrypt blobs<br/>(age key)"]
         EXEC["Execute scripts<br/>(idempotent, content-hashed)"]
-        PULL["Pull externals<br/>(oh-my-zsh SHA pin,<br/>claude-code-config rebase)"]
+        PULL["Pull externals<br/>(oh-my-zsh SHA pin)"]
     end
 
     subgraph HOME["$HOME (target state)"]
@@ -102,7 +102,7 @@ The source tree under `/Users/ed/.local/share/chezmoi` follows chezmoi's naming 
 :   Re-runs whenever the rendered content hashes change. Used for Brewfile sync, macOS defaults, Dock layout.
 
 `run_onchange_after_NAME.sh`
-:   Re-runs when content changes, *after* all files (and externals) are in place. Used to wire the `~/.claude/*` symlinks into the `claude-code-config` external — a run script rather than `symlink_*` sources because `.chezmoiignore` ignores the `.claude` target path (to keep this repo's project-scoped `.claude/` out of `$HOME`), which excludes anything else chezmoi would deploy there.
+:   Re-runs when content changes, *after* all files (and externals) are in place. Used to wire the `~/.claude/*` symlinks into the `claude-code-config` working clone at `~/Development/claude-code-config` (cloning it first on a fresh machine) — a run script rather than `symlink_*` sources because `.chezmoiignore` ignores the `.claude` target path (to keep this repo's project-scoped `.claude/` out of `$HOME`), which excludes anything else chezmoi would deploy there.
 
 ## Render pipeline
 
@@ -126,14 +126,13 @@ All secrets live in the repo as `*.age` blobs. The recipient (public key) is in 
 
 ## Externals
 
-`.chezmoiexternal.toml` pins two upstream sources:
+`.chezmoiexternal.toml` pins one upstream source:
 
 | External | Type | Update channel |
 |---|---|---|
 | `oh-my-zsh` | Archive, pinned by SHA | Weekly draft PR via [`update-externals.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/update-externals.yml) |
-| `claude-code-config` | Git repo, `rebase = true` | Local `git pull --rebase` at apply time, 168 h refresh window |
 
-The two channels reflect the two trust models: `oh-my-zsh` is third-party, so every bump goes through review. `claude-code-config` is mine, so the update channel is `git pull`, not Dependabot-style review.
+`oh-my-zsh` is third-party, so every bump goes through review. `claude-code-config` is deliberately **not** an external: it's an actively-developed working clone at `~/Development/claude-code-config` (bootstrapped by `run_onchange_after_07-claude-global-symlinks.sh`), and a git-repo external would `git pull --rebase` into its working tree at apply time — failing whenever the tree is dirty. Updates flow through the normal git workflow in that repo.
 
 ## Drift detection — three concurrent loops
 
