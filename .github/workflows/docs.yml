@@ -51,7 +51,7 @@ jobs:
               with:
                   packages: libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev libffi-dev
                   version: 1.0
-            - uses: actions/setup-python@v6
+            - uses: actions/setup-python@v7
               with:
                   python-version: '3.12'
                   cache: pip
