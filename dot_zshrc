@@ -330,3 +330,10 @@ chezmoi() {
   esac
   return $rc
 }
+
+# NotebookLM Drive sync destination — used by career-portfolio's
+# `make sync-notebooklm-drive` (safe sources 01-05 by default). Non-secret
+# Google Drive folder path. Uses a dedicated read-write rclone remote
+# `gdrive-rw` (the general `gdrive` remote is drive.readonly). Configure once:
+#   rclone config create gdrive-rw drive scope drive
+export NOTEBOOKLM_RCLONE_REMOTE="gdrive-rw:career-portfolio"
