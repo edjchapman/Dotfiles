@@ -15,8 +15,11 @@ CODE_OF_CONDUCT.md
 SECURITY.md
 CHANGELOG.md
 
-# Templates that are rendered/consumed by scripts, not deployed directly
-Brewfile.tmpl
+# Templates that are rendered/consumed by scripts, not deployed directly.
+# NOTE: .chezmoiignore matches TARGET paths (chezmoi strips the .tmpl suffix
+# before matching), so this must be `Brewfile`, not `Brewfile.tmpl` — otherwise
+# the entry matches nothing and ~/Brewfile gets deployed.
+Brewfile
 
 # Agentic scaffolding (project-scoped Claude Code config — not for $HOME)
 .claude

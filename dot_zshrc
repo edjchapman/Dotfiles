@@ -21,6 +21,12 @@ setopt SHARE_HISTORY
 setopt INC_APPEND_HISTORY
 setopt HIST_IGNORE_SPACE
 
+# Keep manually-typed inline secrets out of the history file. Credentials loaded
+# as env vars via ~/.zshrc.local are already safe (never typed inline); this
+# guards ad-hoc commands that carry a secret in an assignment or a --flag.
+# (Prefix any command with a space to skip history entirely — HIST_IGNORE_SPACE.)
+HISTORY_IGNORE='(*(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|CREDENTIAL)*=*|*--(password|token|api-key|secret|access-key)(=| )*)'
+
 export plugins=(
     git
     python

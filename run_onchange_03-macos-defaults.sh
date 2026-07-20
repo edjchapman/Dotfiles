@@ -151,7 +151,13 @@ defaults -currentHost write com.apple.controlcenter Sound -int 24
 # Privacy & Security (non-sudo)
 # =============================================================================
 
-# Require password immediately after sleep
+# Require a password immediately after sleep / screensaver.
+# NOTE: on macOS 14+ (verified inert on 26.x) these standard-domain
+# com.apple.screensaver keys are NOT honored — the effective lock setting moved to
+# a per-host / managed location. They are kept as a harmless best-effort (they do
+# apply on older macOS and via MDM configuration profiles), but the AUTHORITATIVE
+# control is System Settings ➜ Lock Screen ➜ "Require password after screen saver
+# begins or display is off: Immediately". This write alone does not enforce it.
 defaults write com.apple.screensaver askForPassword -int 1
 defaults write com.apple.screensaver askForPasswordDelay -int 0
 
@@ -178,6 +184,9 @@ defaults write com.apple.Siri LockscreenEnabled -bool false
 
 # DuckDuckGo as default Safari search
 defaults write com.apple.Safari SearchProviderShortName -string "DuckDuckGo" 2>/dev/null || true
+
+# Don't auto-open "safe" downloads (archives, PDFs, disk images) after downloading
+defaults write com.apple.Safari AutoOpenSafeDownloads -bool false 2>/dev/null || true
 
 # =============================================================================
 # iTerm2 — load preferences from chezmoi-managed directory
