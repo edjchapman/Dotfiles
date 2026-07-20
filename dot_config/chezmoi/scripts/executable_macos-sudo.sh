@@ -31,12 +31,26 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setstealthmode on
 # and silently no-ops without it. It's a legacy feature, off by default; its
 # state is monitored read-only by chezmoi-security-audit instead.
 
+# Disable SSH remote login (inbound sshd). `-f` skips the y/n prompt. Like the
+# Remote Apple Events call above, `systemsetup` needs Full Disk Access, so guard
+# it: on failure, warn and let the user finish in System Settings rather than
+# aborting the whole script under `set -e`.
+if ! sudo systemsetup -f -setremotelogin off 2>/dev/null; then
+    echo "SSH remote login: could not disable automatically — grant your terminal Full Disk Access and re-run, or turn off System Settings ➜ General ➜ Sharing ➜ Remote Login." >&2
+fi
+
 # =============================================================================
 # Accounts & disk encryption
 # =============================================================================
 
 # Disable the Guest account
 sudo defaults write /Library/Preferences/com.apple.loginwindow GuestEnabled -bool false
+
+# Disable automatic login — require the account password at boot. Safe no-op if
+# already off: deleting an absent key is guarded, and /etc/kcpassword (the
+# obfuscated stored password) is removed only if present.
+sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null || true
+sudo rm -f /etc/kcpassword
 
 # Assert FileVault is on (report only — never force-enable non-interactively,
 # which would generate a recovery key and force a reboot)
@@ -85,6 +99,8 @@ sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheck
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool true
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true
+# Install XProtect / Gatekeeper / MRT security-definition data automatically
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true
 
 echo ""
-echo "Done. Firewall, stealth mode, Guest account off, Touch ID sudo, energy, and auto-updates active."
+echo "Done. Firewall + stealth, Guest & auto-login off, SSH remote login off, Touch ID sudo, energy, and auto-updates (incl. security-definition data) active."

@@ -22,9 +22,10 @@ usage() {
     cat <<'EOF'
 chezmoi-security-audit [--drift] [--quiet] [-h]
 
-Checks: FileVault, SIP, firewall+stealth, guest account, remote Apple Events,
-SSH key passphrase, AWS creds perms, age key perms, GPG signing key expiry
-(if configured), softwareupdate pending.
+Checks: FileVault, SIP, Gatekeeper, firewall+stealth, guest account, auto-login,
+remote Apple Events, SSH remote login, SSH key passphrase, AWS creds perms, age
+key perms, GPG signing key expiry (if configured), auto-update toggles,
+softwareupdate pending.
 
 Exit codes: 0 clean, 1 drift, 2 audit error.
 EOF
@@ -92,6 +93,21 @@ else
 fi
 
 # ------------------------------------------------------------------------------
+# Gatekeeper — assesses downloaded/unsigned apps before first launch. On by
+# default and not enforced by this repo, so confirm it hasn't been disabled
+# (parity with the SIP check above; spctl isn't script-set here either).
+# ------------------------------------------------------------------------------
+if command -v spctl >/dev/null 2>&1; then
+    if spctl --status 2>/dev/null | grep -qi 'assessments enabled'; then
+        check "Gatekeeper" ok
+    else
+        check "Gatekeeper" fail "Gatekeeper disabled — \`sudo spctl --master-enable\`"
+    fi
+else
+    check "Gatekeeper" skip
+fi
+
+# ------------------------------------------------------------------------------
 # Application firewall (run_once_after_05-macos-sudo.sh sets this on bootstrap).
 # The com.apple.alf plist may be absent on newer macOS; query the daemon directly.
 # ------------------------------------------------------------------------------
@@ -127,6 +143,18 @@ case "$guest_enabled" in
 esac
 
 # ------------------------------------------------------------------------------
+# Automatic login — must stay OFF so an unattended boot can't reach the desktop
+# without the account password (this also underpins FileVault's at-rest value).
+# loginwindow is world-readable; an absent autoLoginUser key => auto-login off.
+# ------------------------------------------------------------------------------
+autologin_user=$(defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null)
+if [[ -z $autologin_user ]]; then
+    check "Auto-login disabled" ok
+else
+    check "Auto-login disabled" fail "auto-login on for '$autologin_user' — \`sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser && sudo rm -f /etc/kcpassword\` (or re-run ~/.config/chezmoi/scripts/macos-sudo.sh)"
+fi
+
+# ------------------------------------------------------------------------------
 # Remote Apple Events — a legacy remote-AppleScript service that should stay off
 # (macOS default). There is no unprivileged read of systemsetup's flag, so
 # introspect the launchd daemon it toggles (com.apple.AEServer): disabled => off
@@ -139,6 +167,21 @@ elif printf '%s' "$rae" | grep -qiE 'AEServer" => (false|enabled)'; then
     check "Remote Apple Events off" fail "remote AppleScript enabled — \`sudo systemsetup -setremoteappleevents off\` (needs Full Disk Access) or disable via System Settings ➜ General ➜ Sharing"
 else
     check "Remote Apple Events off" skip
+fi
+
+# ------------------------------------------------------------------------------
+# SSH remote login (sshd) — should stay OFF (macOS default). systemsetup
+# -getremotelogin needs Full Disk Access, so introspect the launchd daemon it
+# toggles (com.openssh.sshd) exactly like Remote Apple Events above: disabled =>
+# off (good), enabled => on (bad); unknown/unreadable => skip, never a false fail.
+# ------------------------------------------------------------------------------
+sshd_state=$(launchctl print-disabled system 2>/dev/null | grep -i 'com.openssh.sshd')
+if printf '%s' "$sshd_state" | grep -qiE 'sshd" => (true|disabled)'; then
+    check "SSH remote login off" ok
+elif printf '%s' "$sshd_state" | grep -qiE 'sshd" => (false|enabled)'; then
+    check "SSH remote login off" fail "SSH remote login enabled — \`sudo systemsetup -f -setremotelogin off\` or System Settings ➜ General ➜ Sharing ➜ Remote Login"
+else
+    check "SSH remote login off" skip
 fi
 
 # ------------------------------------------------------------------------------
@@ -218,6 +261,24 @@ if [[ -n $gpg_key ]] && command -v gpg >/dev/null 2>&1; then
     fi
 else
     check "GPG signing key expiry" skip
+fi
+
+# ------------------------------------------------------------------------------
+# Automatic-update toggles — the switches run_once_after_05-macos-sudo.sh sets.
+# Distinct from the pending-updates check below (which counts what's waiting):
+# this confirms the machine is still configured to fetch & install updates,
+# including ConfigDataInstall (XProtect / security-definition data). The
+# /Library/Preferences plist is world-readable, so no sudo is needed.
+# ------------------------------------------------------------------------------
+su_domain=/Library/Preferences/com.apple.SoftwareUpdate
+au_off=()
+for su_key in AutomaticCheckEnabled AutomaticDownload AutomaticallyInstallMacOSUpdates CriticalUpdateInstall ConfigDataInstall; do
+    [[ $(defaults read "$su_domain" "$su_key" 2>/dev/null) == 1 ]] || au_off+=("$su_key")
+done
+if ((${#au_off[@]} == 0)); then
+    check "Auto-update toggles" ok
+else
+    check "Auto-update toggles" fail "disabled: ${au_off[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
 fi
 
 # ------------------------------------------------------------------------------
