@@ -16,3 +16,7 @@ site/
 
 # Local Python venvs for docs work
 .venv*/
+
+# Local standup daily-logs (auto-written by the global session-end hook).
+# Standups are delivered to the pinned tracking issue, not committed — see CLAUDE.md.
+/standups/

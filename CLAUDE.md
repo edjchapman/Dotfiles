@@ -132,9 +132,18 @@ When you start working on files matching specific patterns, also load the releva
 | `run_once_*`, `run_onchange_*` | [`.claude/rules/macos-scripts.md`](.claude/rules/macos-scripts.md) |
 | `.chezmoi*.toml`, `.chezmoiignore`, `.chezmoiversion` | [`.claude/rules/chezmoi-config.md`](.claude/rules/chezmoi-config.md) |
 
+## Standups & daily logs
+
+Standups are **not** committed to this repo. They are delivered to the pinned GitHub issue [#114 — 📋 Standup & daily-log tracker](https://github.com/edjchapman/Dotfiles/issues/114), mirroring the [`claude-code-config`](https://github.com/edjchapman/claude-code-config) pattern (its issues #51/#52).
+
+- The global `session-end.sh` hook still writes local scratch logs to `./standups/YYYY-MM-DD-log.md`, but `/standups/` is `.gitignore`d — those files never enter git.
+- Running `/standup` posts the report as a comment on issue #114. A scheduled cloud routine does the same on a cron.
+- **Keep issue #114 open and pinned** — closing it orphans the standup routine's delivery target.
+
 ## Pitfalls
 
 - **Editing `~/.zshrc` directly.** The change will be silently overwritten on next `chezmoi apply`. Edit `dot_zshrc` instead.
+- **Committing standup logs.** `standups/` is `.gitignore`d; the canonical record is the pinned tracking issue #114. Don't re-add the directory to git.
 - **Committing the rendered Brewfile.** `Brewfile.tmpl` is the source; the generated `~/Brewfile` (during apply) must not be committed. `.chezmoiignore` already covers this.
 - **Forgetting `--encrypt`.** `chezmoi add ~/.zshrc.local` (no flag) commits plaintext secrets. Always use `--encrypt` for any file containing credentials.
 - **ShellCheck false negatives in `.tmpl` files.** The Makefile strips `{{…}}` before piping to ShellCheck — beware that template-only logic isn't actually checked.
