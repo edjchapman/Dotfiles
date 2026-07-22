@@ -23,7 +23,7 @@ Acknowledgement target: within 72 hours. Fix target: depends on severity and exp
 
 - Personal preferences in `Brewfile.tmpl`, `dot_zshrc`, or macOS defaults (`run_onchange_03-macos-defaults.sh`). Open a discussion if you disagree with a choice — it's not a vulnerability.
 - The age recipient committed in `.chezmoi.toml.tmpl`. The recipient is public by design; only the private key in `~/.config/chezmoi/key.txt` matters for decryption.
-- Anything in `docs/`, `standups/`, `CLAUDE.md`, `AGENTS.md` — non-deployed metadata.
+- Anything in `docs/`, `CLAUDE.md`, `AGENTS.md` — non-deployed metadata.
 
 ## Accepted risks
 

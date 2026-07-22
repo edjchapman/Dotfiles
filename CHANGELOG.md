@@ -8,6 +8,14 @@ All notable changes to this repo are recorded here. Format follows [Keep a Chang
 
 - Monthly `age-history-scan` audit job (`scripts/check-age-history.sh`): verifies every historical blob of every `*.age` path in git history is valid age ciphertext, enforcing the never-plaintext invariant continuously instead of by one-off review.
 
+### Changed
+
+- Standups now deliver to the pinned GitHub issue [#114](https://github.com/edjchapman/Dotfiles/issues/114) instead of committed `standups/*.md` files, matching the `claude-code-config` tracking-issue pattern. The existing daily logs were migrated as comments before removal.
+
+### Removed
+
+- The tracked `standups/` directory. Local daily-logs written by the `session-end.sh` hook are now `.gitignore`d scratch; the canonical record is issue #114.
+
 ### Security
 
 - `SECURITY.md` gains an "Accepted risks" section documenting the public-repo encryption trade-offs (ciphertext metadata visibility, no forward secrecy in age, retired credentials in historical ciphertext) and the 2026-07-02 verification that the retired GitHub PAT is dead.
