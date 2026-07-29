@@ -24,10 +24,6 @@ jobs:
     make-ci:
         name: make ci (scheduled)
         runs-on: ubuntu-latest
-        env:
-            # Single source of truth for this job. Keep in sync with the gitleaks rev in
-            # .pre-commit-config.yaml (the version was previously hardcoded twice on one line).
-            GITLEAKS_VERSION: '8.21.2'
         steps:
             - uses: actions/checkout@v7
             - name: Install chezmoi
@@ -39,7 +35,10 @@ jobs:
               run: |
                   sudo apt-get update && sudo apt-get install -y shellcheck bats
                   curl -sS https://webi.sh/shfmt | sh
-                  curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+                  # Derive the gitleaks version from .pre-commit-config.yaml so this job and
+                  # the pre-commit hook never skew — update-precommit.yml bumps that one source.
+                  gl_ver=$(grep -A2 'gitleaks/gitleaks' .pre-commit-config.yaml | sed -nE 's/.*rev:[[:space:]]*v?([0-9.]+).*/\1/p' | head -n1)
+                  curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${gl_ver}/gitleaks_${gl_ver}_linux_x64.tar.gz" \
                     | sudo tar -xz -C /usr/local/bin gitleaks
             - name: Run make ci
               run: make ci
