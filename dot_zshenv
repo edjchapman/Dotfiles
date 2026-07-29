@@ -1,1 +1,4 @@
-. "$HOME/.cargo/env"
+# .zshenv runs for EVERY zsh invocation (incl. launchd `zsh -lc` agents and
+# `zsh -c` scripts), so guard the source — a missing file (fresh machine before
+# rustup, or Rust removed) must not error in every shell.
+[[ -f "$HOME/.cargo/env" ]] && . "$HOME/.cargo/env"

@@ -14,7 +14,7 @@
 	ignorecase = false
 	autocrlf = input
 	hooksPath = ~/.config/git/hooks
-{{- if .gpg_signing_key }}
+{{- if and .gpg_signing_key (lookPath "gpg") }}
 [commit]
 	gpgsign = true
 [gpg]
@@ -30,7 +30,7 @@
 		git fetch --all --prune && \
 		git branch -vv | awk '/: gone]/ && $1 != \"*\" {print $1}' | xargs -r -n1 git branch -D; \
 		git pull --ff-only --autostash && \
-		git branch --merged | grep -vE '^\\*|^\\s*(main|master)$' | xargs -r -n1 git branch -d; \
+		git branch --merged main | grep -vE '^\\*|^\\s*(main|master)$' | xargs -r -n1 git branch -d; \
 	}; f"
 [credential "https://github.com"]
 	helper =
