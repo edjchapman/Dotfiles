@@ -29,6 +29,9 @@ case "$cmd" in
         block "Refusing 'chezmoi re-add'. This pulls \$HOME content back into the source state and can clobber template logic. Ask the user to run it manually after reviewing 'chezmoi diff'."
         ;;
     *"chezmoi add "*)
+        # NOTE: this --encrypt allow-path is effectively unreachable — settings.json
+        # denies Bash(chezmoi add:*) outright, and deny wins before this hook runs.
+        # Kept as documentation of intent; /add-secret walks the user through encryption.
         if printf '%s' "$cmd" | grep -q -- '--encrypt'; then
             exit 0
         fi
