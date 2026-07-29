@@ -38,6 +38,7 @@ jobs:
                   # Derive the gitleaks version from .pre-commit-config.yaml so this job and
                   # the pre-commit hook never skew — update-precommit.yml bumps that one source.
                   gl_ver=$(grep -A2 'gitleaks/gitleaks' .pre-commit-config.yaml | sed -nE 's/.*rev:[[:space:]]*v?([0-9.]+).*/\1/p' | head -n1)
+                  : "${gl_ver:?gitleaks rev not found in .pre-commit-config.yaml}"
                   curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${gl_ver}/gitleaks_${gl_ver}_linux_x64.tar.gz" \
                     | sudo tar -xz -C /usr/local/bin gitleaks
             - name: Run make ci
