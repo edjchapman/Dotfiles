@@ -1,0 +1,50 @@
+---
+name: Weekly pre-commit update
+
+# Dependabot has no pre-commit ecosystem, so the hook `rev:` pins rot while
+# Actions/pip get bumped. This runs `pre-commit autoupdate` weekly and opens a
+# draft PR when any hook has a newer release — mirroring update-externals.yml.
+
+on:
+    schedule:
+        - cron: '0 9 * * 1'  # Mondays 09:00 UTC (ahead of the other update-* jobs)
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    autoupdate:
+        name: pre-commit autoupdate
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-python@v7
+              with:
+                  python-version: '3.13'
+            - name: Install pre-commit
+              run: python -m pip install --upgrade pre-commit
+            - name: Run pre-commit autoupdate
+              run: pre-commit autoupdate
+            - name: Create draft PR
+              # create-pull-request no-ops when there is no diff, so no stale check
+              # is needed. BOT_PAT (falling back to GITHUB_TOKEN) lets the PR trigger
+              # CI — a GITHUB_TOKEN-authored PR would be blocked by anti-recursion.
+              uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8
+              with:
+                  token: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
+                  branch: chore/weekly-precommit-update
+                  delete-branch: true
+                  draft: true
+                  commit-message: "chore(pre-commit): autoupdate hook revisions"
+                  title: "chore(pre-commit): weekly hook autoupdate"
+                  body: |
+                      Automated weekly `pre-commit autoupdate` of the hook `rev:` pins in
+                      `.pre-commit-config.yaml`. Dependabot has no pre-commit ecosystem, so
+                      this workflow keeps the hooks fresh.
+
+                      Review each hook's changelog before merging. CI exercises the bumped
+                      hooks via the `pre-commit (all hooks)` job.
+                  add-paths: |
+                      .pre-commit-config.yaml
