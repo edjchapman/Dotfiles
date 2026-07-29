@@ -95,7 +95,10 @@ sudo pmset -a powernap 0
 # Software Updates — ensure automatic updates are enabled
 # =============================================================================
 
-sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
+# Enable automatic update CHECKS via the supported command. On macOS 26 (Tahoe)
+# the AutomaticCheckEnabled defaults key is no longer persisted, so writing it
+# silently no-ops; `softwareupdate --schedule on` is version-stable.
+sudo softwareupdate --schedule on
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool true
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true

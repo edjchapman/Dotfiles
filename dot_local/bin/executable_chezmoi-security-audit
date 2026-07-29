@@ -272,7 +272,12 @@ fi
 # ------------------------------------------------------------------------------
 su_domain=/Library/Preferences/com.apple.SoftwareUpdate
 au_off=()
-for su_key in AutomaticCheckEnabled AutomaticDownload AutomaticallyInstallMacOSUpdates CriticalUpdateInstall ConfigDataInstall; do
+# AutomaticCheckEnabled is intentionally NOT read from the defaults key: macOS 26
+# (Tahoe) no longer persists it there — the key vanishes even while auto-check is
+# on, giving a false negative. `softwareupdate --schedule` is the authoritative,
+# version-stable signal for the check toggle; the other four still live as keys.
+softwareupdate --schedule 2>/dev/null | grep -qi 'turned on' || au_off+=("automatic-check")
+for su_key in AutomaticDownload AutomaticallyInstallMacOSUpdates CriticalUpdateInstall ConfigDataInstall; do
     [[ $(defaults read "$su_domain" "$su_key" 2>/dev/null) == 1 ]] || au_off+=("$su_key")
 done
 if ((${#au_off[@]} == 0)); then
