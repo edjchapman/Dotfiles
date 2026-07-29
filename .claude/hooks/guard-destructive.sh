@@ -35,7 +35,23 @@ case "$cmd" in
         block "Refusing 'chezmoi add' without --encrypt. If this file contains secrets, re-run with --encrypt. If it is non-secret, ask the user to confirm and run it themselves."
         ;;
     *"git push"*)
-        block "Refusing 'git push'. Open a PR via 'gh pr create' instead, or ask the user to push from their terminal after review."
+        # Feature-branch pushes are allowed; force-pushes and pushes to the
+        # protected default branch (main/master) are not. permissions.deny only
+        # matches command prefixes, so the real parsing lives here. Force detection
+        # covers --force* and clustered short flags (-f, -uf, -fu); the main/master
+        # check covers plain, HEAD:, and refs/heads/ refspecs, plus an implicit
+        # `git push` while checked out on main/master (below).
+        if printf '%s' "$cmd" | grep -qE -- '--force|(^|[[:space:]])-[a-zA-Z]*f[a-zA-Z]*([[:space:]]|$)'; then
+            block "Refusing force-push. It can rewrite remote history; run it yourself if you truly need to."
+        fi
+        if printf '%s' "$cmd" | grep -qE -- '(^|[[:space:]]|:|/)(main|master)([[:space:]]|:|$)'; then
+            block "Refusing to push to main/master. Push a feature branch and open a PR instead."
+        fi
+        _branch=$(git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [ "$_branch" = "main" ] || [ "$_branch" = "master" ]; then
+            block "Refusing 'git push' while on '$_branch'. Switch to a feature branch and open a PR."
+        fi
+        exit 0
         ;;
     *"git commit --no-verify"* | *"git commit -n "*)
         block "Refusing to bypass pre-commit hooks. The hooks exist to catch leaked secrets; fix the underlying issue instead."
