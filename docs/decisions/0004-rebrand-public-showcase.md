@@ -3,6 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-06-15
 
+> **Update (2026-07):** the "`claude-code-config` external" phrasing in *Context* below is
+> now outdated — `claude-code-config` is **not** a chezmoi external; it's an actively-developed
+> working clone symlinked into `~/.claude/` (see `CLAUDE.md` and `.claude/rules/chezmoi-config.md`).
+> The decision itself (rebrand, no rename) stands; this note preserves the record.
+
 ## Context
 
 The repo had reached production-grade maturity by release `1.2.0`: matrix-tested templates across `personal/work × arm64/amd64`, drift detection from the shell banner with a single `mac` remediation entry point, age-encrypted secrets with layered pre-commit and CI scanning, weekly draft PRs for external pin refreshes, and first-class Claude Code project-scoped configuration. The capability is unusual for a dotfiles repo — closer to small ops infrastructure than a personal config dump.

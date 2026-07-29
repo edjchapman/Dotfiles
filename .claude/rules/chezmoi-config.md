@@ -36,9 +36,12 @@ updates flow through the normal git workflow in that repo.
 
 ## `.chezmoiignore` — what stays in source
 
-Files at the source-repo root that should NOT deploy to `$HOME`. **Every new top-level file added for repo metadata, documentation, agent config, or CI must go in here**, otherwise it lands in `$HOME` on next apply.
+Controls which **target paths** do NOT deploy to `$HOME`. Two rules govern it:
 
-Currently excludes: repo metadata (`.github`, `LICENSE`, `Makefile`, `README.md`, `CLAUDE.md`, `AGENTS.md`), agent scaffolding (`.claude`, `docs`), lint configs (`.editorconfig`, `.gitattributes`, `.gitleaks.toml`, `.markdownlint-cli2.yaml`, `.pre-commit-config.yaml`, `.yamllint.yaml`), and `Brewfile.tmpl` (consumed by `run_onchange_02`, not deployed directly).
+- chezmoi **auto-ignores every source entry beginning with `.`** (except `.chezmoi*`), so dot-prefixed repo files — `.github`, `.gitattributes`, `.gitleaks.toml`, `.pre-commit-config.yaml`, `.yamllint.yaml`, `.claude`, the repo's own `.editorconfig`, … — never deploy whether or not they're listed here. Entries for them are redundant (documentation at most).
+- **Non-dot top-level files must be listed explicitly**, or they land in `$HOME` on next apply. These are the entries that actually matter: `LICENSE`, `Makefile`, `README.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs`, `mkdocs.yml`, `site`, `assets`, `tests`, `scripts`, `standups`, and `Brewfile` (the *rendered* target — **not** `Brewfile.tmpl`; `.chezmoiignore` matches post-render target paths).
+
+Because it matches **target** paths, a `dot_foo` source (→ `~/.foo`) is suppressed by a `.foo` entry. That is exactly why the repo's `dot_editorconfig` must **not** be shadowed by an `.editorconfig` entry here.
 
 After editing, **verify with `chezmoi diff`**:
 

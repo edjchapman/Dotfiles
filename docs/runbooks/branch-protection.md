@@ -3,7 +3,7 @@
 The `main` branch is protected so that:
 
 - **Direct pushes are blocked.** All changes go via PR.
-- **All 13 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, `plist XML validation`, `brew bundle check (macOS)`, and `docs checks passed` (the aggregate of the dedicated docs CI workflow — see [`/.github/workflows/docs.yml`](https://github.com/edjchapman/dotfiles/blob/main/.github/workflows/docs.yml)).
+- **All 12 CI checks must pass** before merge: `ShellCheck`, `shfmt`, `yamllint`, `markdownlint`, `gitleaks`, `pre-commit (all hooks)`, four `chezmoi templates (…)` matrix cells, `plist XML validation`, and `brew bundle check (macOS)`. The `bats unit tests` job and the dedicated `docs.yml` workflow also run on PRs but are **not** required checks — `docs.yml` only runs on docs-path changes, so requiring it would block every non-docs PR.
 - **Branches must be up to date with `main`** before merging (`strict: true`). This forces CI to re-run on the merge candidate, not the stale branch state.
 - **Linear history.** No merge commits — only squash merges.
 - **Conversation resolution required.** Inline review threads must be resolved before merge.
@@ -11,7 +11,7 @@ The `main` branch is protected so that:
 - **Admin bypass enabled** (`enforce_admins: false`). You can always merge in emergencies.
 
 !!! warning "Use admin bypass sparingly"
-    `enforce_admins: false` is a fire-escape, not a daily-driver. Bypassing the 13 required checks defeats their purpose. Reserve for genuine emergencies (CI broken in a way that blocks all PRs) and document the reason in the PR description.
+    `enforce_admins: false` is a fire-escape, not a daily-driver. Bypassing the 12 required checks defeats their purpose. Reserve for genuine emergencies (CI broken in a way that blocks all PRs) and document the reason in the PR description.
 
 Repo-level merge settings reinforce this:
 
@@ -49,22 +49,16 @@ flowchart LR
         BB["brew bundle check (macOS)"]
     end
 
-    subgraph DOCS["Docs stage"]
-        DC["docs checks passed"]
-    end
-
-    GATE["Merge gate<br/>(all 13 required)"]
+    GATE["Merge gate<br/>(all 12 required)"]
 
     PR --> LINT
     PR --> SECRET
     PR --> TMPL
     PR --> FMT
-    PR --> DOCS
     LINT --> GATE
     SECRET --> GATE
     TMPL --> GATE
     FMT --> GATE
-    DOCS --> GATE
 ```
 
 ## Recovering the protection
@@ -96,8 +90,7 @@ gh api -X PUT repos/edjchapman/dotfiles/branches/main/protection --input - <<'JS
       "chezmoi templates (work / amd64)",
       "chezmoi templates (work / arm64)",
       "plist XML validation",
-      "brew bundle check (macOS)",
-      "docs checks passed"
+      "brew bundle check (macOS)"
     ]
   },
   "enforce_admins": false,

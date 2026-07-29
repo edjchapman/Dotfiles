@@ -26,7 +26,7 @@ The golden rule: **always preview before mutating**.
 | `chezmoi diff` | Before any `apply`. Read-only. Shows exactly what would change in `$HOME`. |
 | `chezmoi apply` | Deploy reviewed changes. **Mutates `$HOME`.** Always run `chezmoi diff` first and surface it to the user before applying. |
 | `chezmoi add --encrypt <path>` | Add or rotate a secret. **Never use plain `chezmoi add` for secrets.** |
-| `make ci` | Before any commit/push. Lint, fmt-check, template matrix, audit, doctor. |
+| `make ci` | Before any commit/push. Lint, fmt-check, verify-templates matrix, test-bats, audit. |
 
 `mac` is an alias for `chezmoi-fix` (defined in `dot_zshrc`). Other helpers (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi execute-template`, `chezmoi verify`, `chezmoi doctor`, `chezmoi re-add`) remain on PATH for specialised tasks; reach for them when `mac` doesn't fit.
 
@@ -36,7 +36,7 @@ The golden rule: **always preview before mutating**.
 - **Run `chezmoi apply` without first showing `chezmoi diff` output to the user.**
 - **Commit secrets unencrypted.** All credentials (AWS, GitHub PAT, Jira, etc.) must go through `chezmoi add --encrypt`. Plaintext secrets must never reach git.
 - **Touch `~/.config/chezmoi/key.txt`** (the age private key). If it leaks, every `.age` file in the repo is compromised.
-- **Push to `main`.** All changes go via PR. `main` is protected: all 13 CI checks must pass, only squash-merges allowed, branches auto-deleted on merge. See [`docs/runbooks/branch-protection.md`](docs/runbooks/branch-protection.md). Self-update workflows open draft PRs only.
+- **Push to `main`.** All changes go via PR. `main` is protected: all 12 CI checks must pass, only squash-merges allowed, branches auto-deleted on merge. See [`docs/runbooks/branch-protection.md`](docs/runbooks/branch-protection.md). Self-update workflows open draft PRs only.
 - **Run `sudo` commands** outside of `run_once_after_05-macos-sudo.sh`. The sudo script is one-time machine bootstrap, not agent territory.
 - **Bypass pre-commit hooks** (`git commit --no-verify`). The hooks exist to stop secret leaks.
 

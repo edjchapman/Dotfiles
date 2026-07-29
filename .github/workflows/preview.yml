@@ -5,7 +5,7 @@
 # generates a unique preview URL per PR (e.g. https://pr-59.dotfiles.pages.dev)
 # and the workflow comments it on the PR.
 #
-# One-time setup (see docs/runbooks/preview-deploys.md for the full walkthrough):
+# One-time setup (see docs/runbooks/cloudflare-deploys.md for the full walkthrough):
 #   1. Create a Cloudflare Pages project named `dotfiles` linked to this repo.
 #   2. Add two repo secrets:
 #        CLOUDFLARE_API_TOKEN — Pages:Edit-scoped token
@@ -62,7 +62,7 @@ jobs:
                   CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
               run: |
                   if [[ -z "$CF_TOKEN" || -z "$CF_ACCOUNT" ]]; then
-                      echo "::notice::Cloudflare secrets not configured — skipping preview deploy. See docs/runbooks/preview-deploys.md."
+                      echo "::notice::Cloudflare secrets not configured — skipping preview deploy. See docs/runbooks/cloudflare-deploys.md."
                       echo "skip=true" >> "$GITHUB_OUTPUT"
                   else
                       echo "skip=false" >> "$GITHUB_OUTPUT"
