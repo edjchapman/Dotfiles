@@ -2,6 +2,9 @@
 # Install Homebrew packages from Brewfile
 # chezmoi run_onchange: re-runs whenever Brewfile content changes
 # Brewfile hash: {{ include "Brewfile.tmpl" | sha256sum }}
+# machine_type: {{ .machine_type }}  — included so a personal/work flip re-triggers
+# this script (the Brewfile hash above is of the raw, unrendered template, which is
+# identical across machine types and so would otherwise miss the flip).
 
 set -euo pipefail
 
