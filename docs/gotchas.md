@@ -66,8 +66,8 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! warning "Self-update PRs are draft-only by design"
     `update-externals.yml` opens drafts so they don't auto-merge. Don't change this — the review step is the whole point of the channel.
 
-!!! warning "Branch protection requires ALL 13 checks"
-    Including the new `docs checks passed` aggregate. If you push a docs change and the docs job fails, `main` cannot accept the PR until it's fixed.
+!!! warning "Branch protection requires ALL 12 checks"
+    `docs checks passed` and `bats unit tests` run on PRs but are **not** among the 12 required checks — `docs.yml` only runs on docs-path changes, so requiring it would block every non-docs PR. A failing docs job does not, by itself, block `main`.
 
 !!! info "Squash merges only — no merge commits"
     Repo settings disable `merge-commit` and `rebase-merge`. Trying to merge any other way will fail at the merge step.
