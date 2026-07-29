@@ -33,11 +33,12 @@ jobs:
             - name: Install chezmoi
               run: sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
             - name: Install linters
+              # These are exactly the tools `make ci` invokes: shellcheck (lint),
+              # shfmt (fmt-check), bats (test-bats), gitleaks (audit). chezmoi is
+              # installed above; ggshield/brew are optional and skip gracefully.
               run: |
-                  sudo apt-get update && sudo apt-get install -y shellcheck
+                  sudo apt-get update && sudo apt-get install -y shellcheck bats
                   curl -sS https://webi.sh/shfmt | sh
-                  python3 -m pip install --user yamllint
-                  npm install -g markdownlint-cli2
                   curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
                     | sudo tar -xz -C /usr/local/bin gitleaks
             - name: Run make ci
