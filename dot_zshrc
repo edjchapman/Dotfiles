@@ -1,14 +1,16 @@
 # Path to your oh-my-zsh installation.
 export ZSH=~/.oh-my-zsh
 
-export DEFAULT_USER=$USER
+# These are read by oh-my-zsh within this shell before it sources, so they only
+# need to be shell variables — no export required.
+DEFAULT_USER=$USER
 
-export ZSH_THEME="agnoster"
+ZSH_THEME="agnoster"
 
 # Command auto-correction.
-export ENABLE_CORRECTION="true"
+ENABLE_CORRECTION="true"
 
-export HIST_STAMPS="yyyy-mm-dd"
+HIST_STAMPS="yyyy-mm-dd"
 
 # History configuration
 HISTSIZE=50000
@@ -27,7 +29,7 @@ setopt HIST_IGNORE_SPACE
 # (Prefix any command with a space to skip history entirely — HIST_IGNORE_SPACE.)
 HISTORY_IGNORE='(*(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|ACCESS_KEY|SECRET_KEY|PRIVATE_KEY|CREDENTIAL)*=*|*--(password|token|api-key|secret|access-key)(=| )*)'
 
-export plugins=(
+plugins=(
     git
     python
     virtualenv
@@ -35,20 +37,23 @@ export plugins=(
     brew
 )
 
-source $ZSH/oh-my-zsh.sh
+# Completion fpath (custom ~/.zfunc + brew) — set BEFORE oh-my-zsh sources so its
+# single compinit picks these up; this avoids running a second compinit later.
+fpath=(~/.zfunc $fpath)
+if type brew &>/dev/null; then
+    FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
+fi
 
-# Lazy-load thefuck (saves ~200ms on shell startup)
-fuck() { unfunction fuck; eval $(thefuck --alias); fuck "$@"; }
+source $ZSH/oh-my-zsh.sh
 
 # Set CLICOLOR if you want Ansi Colors in iTerm2
 export CLICOLOR=1
 
-# Set colors to match iTerm2 Terminal Colors
-export TERM=xterm-256color
-
-# PATH
-export PATH="/usr/local/sbin:$HOME/bin:/usr/local/bin:$PATH"
-export PATH="$PATH:$HOME/.local/bin"
+# PATH — personal scripts ($HOME/bin) take priority; Homebrew (arm64 or Intel) is
+# already on PATH via .zprofile (brew shellenv), and ~/.local/bin via pipx there
+# too. /usr/local/{s,}bin are kept but placed AFTER $PATH so a stray binary can't
+# shadow Homebrew kegs on Apple Silicon.
+export PATH="$HOME/bin:$PATH:/usr/local/sbin:/usr/local/bin"
 
 # GNU tools — override BSD defaults with GNU versions
 if [[ -d /opt/homebrew/opt/coreutils ]]; then
@@ -57,14 +62,6 @@ if [[ -d /opt/homebrew/opt/coreutils ]]; then
             export PATH="/opt/homebrew/opt/$gnubin/libexec/gnubin:$PATH"
     done
 fi
-
-# Completions (homebrew + custom)
-fpath=(~/.zfunc $fpath)
-if type brew &>/dev/null; then
-    FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
-fi
-autoload -Uz compinit
-compinit
 
 # fnm (Fast Node Manager) — auto-switch Node version on cd
 if command -v fnm &>/dev/null; then
@@ -79,15 +76,8 @@ fi
 # iTerm2 shell integration (installed on first launch of iTerm2)
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh" || true
 
-# MySQL — paths for mysql@8.4 (only if installed)
-if [[ -d /opt/homebrew/opt/mysql@8.4 ]]; then
-    export PATH="/opt/homebrew/opt/mysql@8.4/bin:$PATH"
-    export LDFLAGS="-L/opt/homebrew/opt/mysql@8.4/lib"
-    export CPPFLAGS="-I/opt/homebrew/opt/mysql@8.4/include"
-fi
-
 # OpenJDK — paths for openjdk@17 (keg-only; only if installed)
-# Append to CPPFLAGS (don't clobber) so it composes with the block above.
+# Append to any existing CPPFLAGS (don't clobber).
 if [[ -d /opt/homebrew/opt/openjdk@17 ]]; then
     export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"
     export CPPFLAGS="-I/opt/homebrew/opt/openjdk@17/include${CPPFLAGS:+ $CPPFLAGS}"
@@ -99,69 +89,6 @@ fi
 
 # Windsurf (only if installed)
 [[ -d "$HOME/.codeium/windsurf/bin" ]] && export PATH="$HOME/.codeium/windsurf/bin:$PATH"
-
-# Sync with origin and safely clean up stale branches
-hub-sync-clean() {
-  echo "Syncing with origin..."
-  hub sync
-  git fetch --prune
-
-  echo "Checking for branches whose remote no longer exists..."
-  local -a gone_branches
-  gone_branches=("${(@f)$(git branch -vv | awk '/: gone]/{print $1}')}")
-
-  if [[ ${#gone_branches[@]} -eq 0 || -z "${gone_branches[1]}" ]]; then
-    echo "No stale branches to remove."
-    return
-  fi
-
-  local merged
-  merged=$(git branch --merged main)
-
-  local -a merged_gone unmerged_gone
-  for branch in "${gone_branches[@]}"; do
-    if echo "$merged" | grep -qE "^[* ] ${branch}$"; then
-      merged_gone+=("$branch")
-    else
-      unmerged_gone+=("$branch")
-    fi
-  done
-
-  if [[ ${#merged_gone[@]} -gt 0 ]]; then
-    echo "Merged branches (safe to delete):"
-    for branch in "${merged_gone[@]}"; do
-      echo "  - $branch"
-    done
-    echo
-    read "reply?Delete these ${#merged_gone[@]} merged branches? [y/N] "
-    if [[ $reply =~ ^[Yy]$ ]]; then
-      for branch in "${merged_gone[@]}"; do
-        git branch -d "$branch"
-      done
-      echo "Merged branches deleted."
-    fi
-  fi
-
-  if [[ ${#unmerged_gone[@]} -gt 0 ]]; then
-    echo
-    echo "WARNING: Unmerged branches (remote deleted, local changes may be lost):"
-    for branch in "${unmerged_gone[@]}"; do
-      echo "  - $branch"
-    done
-    echo
-    read "reply?Force delete these ${#unmerged_gone[@]} unmerged branches? [y/N] "
-    if [[ $reply =~ ^[Yy]$ ]]; then
-      for branch in "${unmerged_gone[@]}"; do
-        git branch -D "$branch"
-      done
-      echo "Unmerged branches force-deleted."
-    else
-      echo "Unmerged branches kept."
-    fi
-  fi
-
-  echo "Clean-up complete."
-}
 
 # CLAUDE
 export DISABLE_AUTOUPDATER=1
