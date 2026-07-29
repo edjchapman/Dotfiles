@@ -15,17 +15,27 @@ fi
 
 echo "Setting up Dock layout..."
 
+# Add an app to the Dock only if it exists. A missing app must never abort the
+# script (set -e) after we've already cleared the Dock — that would leave a
+# half-built Dock until the next apply.
+add_app() {
+    if [[ -e "$1" ]]; then
+        dockutil --add "$1" --no-restart
+    else
+        echo "  skipping (not installed): $1"
+    fi
+}
+
 # Remove all current items
 dockutil --remove all --no-restart
 
 # Add apps in order
-dockutil --add /Applications/Brave\ Browser.app --no-restart
-dockutil --add /Applications/iTerm.app --no-restart
-dockutil --add /Applications/Obsidian.app --no-restart
+add_app "/Applications/Brave Browser.app"
+add_app "/Applications/iTerm.app"
 {{ if eq .machine_type "personal" -}}
-dockutil --add /Applications/Tidal.app --no-restart
+add_app "/Applications/Tidal.app"
 {{ end -}}
-dockutil --add /System/Applications/System\ Settings.app --no-restart
+add_app "/System/Applications/System Settings.app"
 
 # Add Downloads folder as a stack
 dockutil --add ~/Downloads --view fan --display stack --sort dateadded

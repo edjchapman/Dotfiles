@@ -102,10 +102,11 @@ defaults write NSGlobalDomain AppleKeyboardUIMode -int 3
 # Trackpad
 # =============================================================================
 
-# Enable tap to click
+# Enable tap to click. The -currentHost NSGlobalDomain write is the one macOS
+# reads; the AppleBluetoothMultitouch.trackpad key covers the Bluetooth trackpad.
+# (A plain-global tapBehavior write is redundant with the -currentHost one.)
 defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
 defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
-defaults write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
 
 # =============================================================================
 # Screenshots
@@ -164,9 +165,9 @@ defaults write com.apple.screensaver askForPasswordDelay -int 0
 # Disable AirDrop discoverability
 defaults write com.apple.sharingd DiscoverableMode -string "Off"
 
-# Disable Apple analytics & telemetry
-defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" AutoSubmit -bool false 2>/dev/null || true
-defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" ThirdPartyDataSubmit -bool false 2>/dev/null || true
+# Apple analytics & telemetry opt-out lives in the privileged bootstrap script
+# (dot_config/chezmoi/scripts/executable_macos-sudo.sh): DiagnosticMessagesHistory
+# is a root-owned plist, so writing it here as the user silently no-ops.
 
 # Disable Siri data sharing
 defaults write com.apple.assistant.support "Siri Data Sharing Opt-In Status" -int 2
@@ -178,7 +179,6 @@ defaults write com.apple.AdLib allowApplePersonalizedAdvertising -bool false
 defaults write com.apple.lookup.shared LookupSuggestionsDisabled -bool true
 
 # Disable Siri suggestions and lock screen access
-defaults write com.apple.Siri SiriCanLearnFromAppBlacklist -string "()"
 defaults write com.apple.Siri StatusMenuVisible -bool false
 defaults write com.apple.Siri LockscreenEnabled -bool false
 

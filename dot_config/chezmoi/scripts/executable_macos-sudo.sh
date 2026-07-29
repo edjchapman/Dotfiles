@@ -102,5 +102,15 @@ sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdate
 # Install XProtect / Gatekeeper / MRT security-definition data automatically
 sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true
 
+# =============================================================================
+# Analytics & telemetry
+# =============================================================================
+
+# Opt out of Apple diagnostic/analytics submission. DiagnosticMessagesHistory is a
+# root-owned plist, so these need elevation (moved here from
+# run_onchange_03-macos-defaults.sh, where they silently no-opped as the user).
+sudo defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" AutoSubmit -bool false
+sudo defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" ThirdPartyDataSubmit -bool false
+
 echo ""
-echo "Done. Firewall + stealth, Guest & auto-login off, SSH remote login off, Touch ID sudo, energy, and auto-updates (incl. security-definition data) active."
+echo "Done. Firewall + stealth, Guest & auto-login off, SSH remote login off, Touch ID sudo, energy, auto-updates (incl. security-definition data), and analytics opt-out active."

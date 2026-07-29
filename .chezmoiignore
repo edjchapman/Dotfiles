@@ -24,15 +24,16 @@ Brewfile
 # Agentic scaffolding (project-scoped Claude Code config — not for $HOME)
 .claude
 
-# Linter/formatter configs that apply to this repo only
-.editorconfig
+# Linter/formatter configs that apply to this repo only.
+# NOTE: .editorconfig is intentionally absent — a dot_editorconfig source deploys
+# ~/.editorconfig, and .chezmoiignore matches TARGET paths, so listing it here
+# would suppress that deployment. The repo's own root .editorconfig is a
+# dot-prefixed source, which chezmoi auto-ignores, so it stays out of $HOME anyway.
 .markdownlint-cli2.yaml
 .pre-commit-config.yaml
 .yamllint.yaml
 .codespellrc
 .lychee.toml
-.vale.ini
-.vale
 
 # Documentation
 docs
