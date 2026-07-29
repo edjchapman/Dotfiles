@@ -35,7 +35,21 @@ case "$cmd" in
         block "Refusing 'chezmoi add' without --encrypt. If this file contains secrets, re-run with --encrypt. If it is non-secret, ask the user to confirm and run it themselves."
         ;;
     *"git push"*)
-        block "Refusing 'git push'. Open a PR via 'gh pr create' instead, or ask the user to push from their terminal after review."
+        # Feature-branch pushes are allowed; force-pushes and pushes to the
+        # protected default branch (main/master) are not. This is the robust gate:
+        # permissions.deny only pattern-matches the common force forms, so the
+        # branch/refspec logic lives here where the command can actually be parsed.
+        if printf '%s' "$cmd" | grep -qE -- '--force|(^|[[:space:]])-f([[:space:]]|$)'; then
+            block "Refusing force-push. It can rewrite remote history; run it yourself if you truly need to."
+        fi
+        if printf '%s' "$cmd" | grep -qE -- '(^|[[:space:]]|:)(main|master)([[:space:]]|:|$)'; then
+            block "Refusing to push to main/master. Push a feature branch and open a PR instead."
+        fi
+        _branch=$(git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [ "$_branch" = "main" ] || [ "$_branch" = "master" ]; then
+            block "Refusing 'git push' while on '$_branch'. Switch to a feature branch and open a PR."
+        fi
+        exit 0
         ;;
     *"git commit --no-verify"* | *"git commit -n "*)
         block "Refusing to bypass pre-commit hooks. The hooks exist to catch leaked secrets; fix the underlying issue instead."
