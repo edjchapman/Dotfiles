@@ -36,13 +36,15 @@ case "$cmd" in
         ;;
     *"git push"*)
         # Feature-branch pushes are allowed; force-pushes and pushes to the
-        # protected default branch (main/master) are not. This is the robust gate:
-        # permissions.deny only pattern-matches the common force forms, so the
-        # branch/refspec logic lives here where the command can actually be parsed.
-        if printf '%s' "$cmd" | grep -qE -- '--force|(^|[[:space:]])-f([[:space:]]|$)'; then
+        # protected default branch (main/master) are not. permissions.deny only
+        # matches command prefixes, so the real parsing lives here. Force detection
+        # covers --force* and clustered short flags (-f, -uf, -fu); the main/master
+        # check covers plain, HEAD:, and refs/heads/ refspecs, plus an implicit
+        # `git push` while checked out on main/master (below).
+        if printf '%s' "$cmd" | grep -qE -- '--force|(^|[[:space:]])-[a-zA-Z]*f[a-zA-Z]*([[:space:]]|$)'; then
             block "Refusing force-push. It can rewrite remote history; run it yourself if you truly need to."
         fi
-        if printf '%s' "$cmd" | grep -qE -- '(^|[[:space:]]|:)(main|master)([[:space:]]|:|$)'; then
+        if printf '%s' "$cmd" | grep -qE -- '(^|[[:space:]]|:|/)(main|master)([[:space:]]|:|$)'; then
             block "Refusing to push to main/master. Push a feature branch and open a PR instead."
         fi
         _branch=$(git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
