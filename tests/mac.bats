@@ -239,3 +239,18 @@ STUB
     run grep -n "refreshed: banner showed" "$FIX"
     [ "$status" -eq 0 ]
 }
+
+@test "is-tap: a bare org/tap is a tap (untap, not uninstall)" {
+    run "$FIX" --is-tap "hashicorp/tap"
+    [ "$status" -eq 0 ]
+}
+
+@test "is-tap: a core formula/cask is not a tap" {
+    run "$FIX" --is-tap "wget"
+    [ "$status" -eq 1 ]
+}
+
+@test "is-tap: a tapped formula (org/tap/formula) is not a bare tap" {
+    run "$FIX" --is-tap "hashicorp/tap/terraform"
+    [ "$status" -eq 1 ]
+}

@@ -21,6 +21,18 @@ plural() {
     if ((n == 1)); then printf '%s' "$s"; else printf '%s' "$p"; fi
 }
 
+# A Homebrew tap is "org/name" (one slash); a tapped formula is "org/name/formula"
+# (two) and core formulae/casks have none. Taps are removed with `untap`, not
+# `uninstall` (which would look for a formula named after the tap and fail).
+is_brew_tap() { [[ $1 == */* && $1 != */*/* ]]; }
+
+# Test hook: `chezmoi-fix --is-tap <name>` exits 0 if <name> is a bare tap, 1
+# otherwise — lets bats-core verify tap detection without the interactive flow.
+if [[ ${1:-} == --is-tap ]]; then
+    is_brew_tap "${2:-}"
+    exit $?
+fi
+
 # Test hook: when set, skip the runtime prerequisites (chezmoi, TTY, drift-check
 # refresh) and exit after rendering the menu. Lets bats-core exercise menu
 # logic against synthetic state files without a real chezmoi install.
@@ -227,10 +239,15 @@ case "$id" in
                     fi
                     ;;
                 u | U)
-                    read -r -p "   really uninstall ${pkg}? [y/N] " confirm <"$TTY"
+                    read -r -p "   really remove ${pkg}? [y/N] " confirm <"$TTY"
                     if [[ $confirm =~ ^[Yy]$ ]]; then
                         # Not in Brewfile.tmpl, so there's no journal event to record.
-                        brew uninstall "$pkg" || echo "   uninstall failed: $pkg" >&2
+                        # A bare "org/tap" is a tap → untap; anything else → uninstall.
+                        if is_brew_tap "$pkg"; then
+                            brew untap "$pkg" || echo "   untap failed: $pkg" >&2
+                        else
+                            brew uninstall "$pkg" || echo "   uninstall failed: $pkg" >&2
+                        fi
                     else
                         echo "   kept $pkg (still unmanaged)"
                     fi
