@@ -14,11 +14,15 @@
 	ignorecase = false
 	autocrlf = input
 	hooksPath = ~/.config/git/hooks
-{{- if and .gpg_signing_key (lookPath "gpg") }}
+{{- if and .gpg_signing_key (stat "/usr/local/bin/gpg") }}
 [commit]
 	gpgsign = true
 [gpg]
-	program = {{ lookPath "gpg" }}
+	# Pin GPG Suite (MacGPG2) explicitly. `lookPath "gpg"` baked in whichever gpg
+	# was first on the render-time PATH (Homebrew gnupg vs GPG Suite), so
+	# ~/.gitconfig phantom-drifted depending on where chezmoi was rendered. Gating
+	# on stat of this path is PATH-independent — deterministic across environments.
+	program = /usr/local/bin/gpg
 {{- end }}
 [alias]
 	# Squash-merge-aware sync. After a squash-merge the original branch isn't an
