@@ -24,7 +24,7 @@ brew "gnu-sed"
 brew "go"
 brew "graphviz"
 brew "grep"
-brew "hashicorp/tap/terraform"
+brew "opentofu"
 brew "htop"
 brew "jq"
 brew "less"
@@ -35,7 +35,6 @@ brew "pandoc"
 brew "pipx"
 brew "poppler"
 brew "pre-commit"
-brew "python@3.11"
 brew "python@3.13"
 brew "rclone"
 brew "restic"
@@ -111,5 +110,6 @@ cask "monero-wallet"
 cask "sparrow"
 {{ end -}}
 
-# Mac App Store (requires signed-in Apple ID)
+# Mac App Store — requires a signed-in Apple ID. On a fresh machine, sign in to
+# the App Store first, otherwise `brew bundle` (run_onchange_02) exits non-zero.
 mas "Amphetamine", id: 937984704
