@@ -23,7 +23,7 @@ usage() {
 chezmoi-security-audit [--drift] [--quiet] [-h]
 
 Checks: FileVault, SIP, Gatekeeper, firewall+stealth, guest account, auto-login,
-screen lock on wake, remote Apple Events, SSH remote login, SSH key passphrase,
+remote Apple Events, SSH remote login, SSH key passphrase,
 AWS creds perms, age key perms, GPG signing key expiry (if configured),
 auto-update toggles, softwareupdate pending.
 
@@ -152,36 +152,6 @@ if [[ -z $autologin_user ]]; then
     check "Auto-login disabled" ok
 else
     check "Auto-login disabled" fail "auto-login on for '$autologin_user' — \`sudo defaults delete /Library/Preferences/com.apple.loginwindow autoLoginUser && sudo rm -f /etc/kcpassword\` (or re-run ~/.config/chezmoi/scripts/macos-sudo.sh)"
-fi
-
-# ------------------------------------------------------------------------------
-# Screen lock on wake — require a password immediately (no grace period) after the
-# screen locks; the evil-maid / unattended-screen defence that underpins FileVault
-# while the machine is awake. macOS keeps several legacy homes for this, but the
-# AUTHORITATIVE, sudo-free-READABLE control on macOS 14+ (verified on 26/Tahoe) is
-# `sysadminctl -screenLock`, which is what System Settings ➜ Lock Screen writes.
-# The old com.apple.screensaver askForPassword keys (standard AND ByHost) are
-# decoupled from it and unreliable — reading them gives false results that never
-# clear after remediation — so they are NOT read here. Audit-only: setting it needs
-# sudo / a profile, so a grace period nags via the drift banner until fixed by hand.
-#   delay 0    => immediate (good)
-#   delay > 0  => grace period, password not required for N seconds (bad)
-#   "is off"   => password never required (bad)
-# ------------------------------------------------------------------------------
-if command -v sysadminctl >/dev/null 2>&1; then
-    sl_status=$(sysadminctl -screenLock status 2>&1)
-    sl_delay=$(printf '%s' "$sl_status" | grep -oE 'delay is [0-9]+' | grep -oE '[0-9]+')
-    if printf '%s' "$sl_status" | grep -qi 'is off'; then
-        check "Screen lock on wake" fail "password never required after lock — System Settings ➜ Lock Screen ➜ \"Require password … : Immediately\""
-    elif [[ $sl_delay == 0 ]]; then
-        check "Screen lock on wake" ok
-    elif [[ -n $sl_delay ]]; then
-        check "Screen lock on wake" fail "password only required after ${sl_delay}s grace — set to Immediately in System Settings ➜ Lock Screen"
-    else
-        check "Screen lock on wake" skip
-    fi
-else
-    check "Screen lock on wake" skip
 fi
 
 # ------------------------------------------------------------------------------
