@@ -23,13 +23,10 @@ set -euo pipefail
 repo="$HOME/Development/claude-code-config"
 setup="$repo/scripts/setup-global.sh"
 
-# ACCEPTED RISK (clone + later exec of an external repo). The clone runs only on a
-# fresh machine (no .git present); thereafter $repo is a working clone this user
-# controls via normal git, and the exec below runs that LOCAL setup-global.sh — not
-# whatever is on the remote. At bootstrap the trust reduces to "my GitHub account is
-# intact", which already gates the entire dotfiles apply (chezmoi runs the whole
-# source tree), so pinning this one repo would only defend the narrow case of it
-# being compromised in isolation. Documented in SECURITY.md ("Accepted risks").
+# ACCEPTED RISK: clone (fresh-machine only) + exec of claude-code-config's
+# setup-global.sh. Post-bootstrap this execs the LOCAL clone; at bootstrap the trust
+# equals the GitHub account that already gates the whole apply. Rationale in
+# SECURITY.md → "Accepted risks".
 if [[ ! -d "$repo/.git" ]]; then
     echo "claude-code-config not found at $repo — cloning." >&2
     git clone https://github.com/edjchapman/claude-code-config.git "$repo"

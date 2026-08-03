@@ -155,25 +155,33 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Screen lock on wake — require a password immediately after the screen saver
-# starts or the display sleeps (the evil-maid / unattended-screen defence that
-# underpins FileVault while the machine is awake). On macOS 14+ (verified on
-# 26/Tahoe) the STANDARD-domain com.apple.screensaver askForPassword key is inert;
-# the authoritative value lives in the per-host (ByHost) domain, written by
-# System Settings ➜ Lock Screen. This is audit-only — it cannot be set without a
-# configuration profile, so an unset/relaxed value nags here until fixed by hand.
-#   askForPassword == 1 && askForPasswordDelay in {0, unset}  => immediate (good)
-#   askForPassword == 1 && askForPasswordDelay > 0            => delayed (bad)
-#   askForPassword absent/0                                   => not enforced (bad)
+# Screen lock on wake — require a password immediately (no grace period) after the
+# screen locks; the evil-maid / unattended-screen defence that underpins FileVault
+# while the machine is awake. macOS keeps several legacy homes for this, but the
+# AUTHORITATIVE, sudo-free-READABLE control on macOS 14+ (verified on 26/Tahoe) is
+# `sysadminctl -screenLock`, which is what System Settings ➜ Lock Screen writes.
+# The old com.apple.screensaver askForPassword keys (standard AND ByHost) are
+# decoupled from it and unreliable — reading them gives false results that never
+# clear after remediation — so they are NOT read here. Audit-only: setting it needs
+# sudo / a profile, so a grace period nags via the drift banner until fixed by hand.
+#   delay 0    => immediate (good)
+#   delay > 0  => grace period, password not required for N seconds (bad)
+#   "is off"   => password never required (bad)
 # ------------------------------------------------------------------------------
-sl_ask=$(defaults -currentHost read com.apple.screensaver askForPassword 2>/dev/null)
-sl_delay=$(defaults -currentHost read com.apple.screensaver askForPasswordDelay 2>/dev/null)
-if [[ $sl_ask == 1 && (-z $sl_delay || $sl_delay == 0) ]]; then
-    check "Screen lock on wake" ok
-elif [[ $sl_ask == 1 ]]; then
-    check "Screen lock on wake" fail "password required but only after ${sl_delay}s — set to Immediately in System Settings ➜ Lock Screen"
+if command -v sysadminctl >/dev/null 2>&1; then
+    sl_status=$(sysadminctl -screenLock status 2>&1)
+    sl_delay=$(printf '%s' "$sl_status" | grep -oE 'delay is [0-9]+' | grep -oE '[0-9]+')
+    if printf '%s' "$sl_status" | grep -qi 'is off'; then
+        check "Screen lock on wake" fail "password never required after lock — System Settings ➜ Lock Screen ➜ \"Require password … : Immediately\""
+    elif [[ $sl_delay == 0 ]]; then
+        check "Screen lock on wake" ok
+    elif [[ -n $sl_delay ]]; then
+        check "Screen lock on wake" fail "password only required after ${sl_delay}s grace — set to Immediately in System Settings ➜ Lock Screen"
+    else
+        check "Screen lock on wake" skip
+    fi
 else
-    check "Screen lock on wake" fail "password-on-wake not set — System Settings ➜ Lock Screen ➜ \"Require password after screen saver begins or display is off: Immediately\""
+    check "Screen lock on wake" skip
 fi
 
 # ------------------------------------------------------------------------------

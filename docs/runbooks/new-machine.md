@@ -125,7 +125,7 @@ These can't be templated — they require in-app sign-in or System Settings clic
 - **LuLu** — launch once, approve System and Network Extensions.
 - **ProtonMail** — sign in.
 - **iTerm2** — launch once to populate `~/.config/iterm2/`.
-- **System Settings ➜ Lock Screen** — set "Require password after screen saver begins or display is off" to **Immediately**. This cannot be scripted on macOS 26 (the `defaults` keys are inert; only a config profile or this manual click works). The `chezmoi-security-audit` "Screen lock on wake" check flags it in the drift banner until it's set.
+- **System Settings ➜ Lock Screen** — set "Require password after screen saver begins or display is off" to **Immediately**. This can't be set unattended on macOS 26 (the `defaults` keys are inert; the authoritative `sysadminctl -screenLock` needs sudo or a config profile). The `chezmoi-security-audit` "Screen lock on wake" check flags it in the drift banner until it's set.
 
 ### 6. SSH keys
 
