@@ -153,14 +153,16 @@ defaults -currentHost write com.apple.controlcenter Sound -int 24
 # =============================================================================
 
 # Require a password immediately after sleep / screensaver.
-# NOTE: on macOS 14+ (verified inert on 26.x) these standard-domain
-# com.apple.screensaver keys are NOT honored — the effective lock setting moved to
-# a per-host / managed location. They are kept as a harmless best-effort (they do
-# apply on older macOS and via MDM configuration profiles), but the AUTHORITATIVE
-# control is System Settings ➜ Lock Screen ➜ "Require password after screen saver
-# begins or display is off: Immediately". This write alone does not enforce it.
-defaults write com.apple.screensaver askForPassword -int 1
-defaults write com.apple.screensaver askForPasswordDelay -int 0
+# NOT SET HERE ON PURPOSE. On macOS 14+ (verified inert on 26/Tahoe) the
+# standard-domain com.apple.screensaver askForPassword / askForPasswordDelay keys
+# are NOT honored — the effective lock setting moved to the per-host (ByHost) /
+# managed domain, which only System Settings or an MDM configuration profile can
+# write. A `defaults write` here would look like coverage while enforcing nothing.
+# Per the security review this is left to a one-time manual step, tracked by the
+# "Screen lock on wake" check in chezmoi-security-audit (which nags via the drift
+# banner until set) and documented in docs/runbooks/new-machine.md:
+#   System Settings ➜ Lock Screen ➜ "Require password after screen saver begins or
+#   display is off: Immediately".
 
 # Disable AirDrop discoverability
 defaults write com.apple.sharingd DiscoverableMode -string "Off"
