@@ -158,9 +158,8 @@ defaults -currentHost write com.apple.controlcenter Sound -int 24
 # the authoritative lock-grace control is `sysadminctl -screenLock` (what System
 # Settings ➜ Lock Screen writes), which needs sudo or an MDM profile. A `defaults
 # write` here would look like coverage while enforcing nothing. Per the security
-# review this is left to a one-time manual step, tracked by the "Screen lock on
-# wake" check in chezmoi-security-audit (which nags via the drift banner until set)
-# and documented in docs/runbooks/new-machine.md:
+# review this is left to a one-time manual step, documented in
+# docs/runbooks/new-machine.md:
 #   System Settings ➜ Lock Screen ➜ "Require password after screen saver begins or
 #   display is off: Immediately".
 
