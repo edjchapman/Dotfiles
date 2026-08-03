@@ -6,6 +6,9 @@ set -euo pipefail
 
 if ! command -v brew &>/dev/null; then
     echo "Installing Homebrew..."
+    # ACCEPTED RISK: unpinned curl-to-bash of Homebrew's canonical installer, once
+    # at fresh-machine bootstrap. Rationale (and why not pinned) in SECURITY.md →
+    # "Accepted risks". Do not "fix" by freezing an unreviewed SHA.
     if ! /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
         echo "ERROR: Homebrew installation failed."
         exit 1

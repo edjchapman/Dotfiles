@@ -23,6 +23,10 @@ set -euo pipefail
 repo="$HOME/Development/claude-code-config"
 setup="$repo/scripts/setup-global.sh"
 
+# ACCEPTED RISK: clone (fresh-machine only) + exec of claude-code-config's
+# setup-global.sh. Post-bootstrap this execs the LOCAL clone; at bootstrap the trust
+# equals the GitHub account that already gates the whole apply. Rationale in
+# SECURITY.md → "Accepted risks".
 if [[ ! -d "$repo/.git" ]]; then
     echo "claude-code-config not found at $repo — cloning." >&2
     git clone https://github.com/edjchapman/claude-code-config.git "$repo"
