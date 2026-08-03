@@ -67,15 +67,17 @@ emit() { [[ $QUIET -eq 0 ]] && printf '%s\n' "$*"; }
 # Modern brew prints block form — a `Would uninstall formulae:` / `... casks:` /
 # `Would untap:` header followed by one bare name per line — while older brew
 # printed inline form (`Would uninstall foo`). Cache cleanups
-# (`Would remove: /path/…`) are not packages and are skipped in both forms.
+# (`Would remove: /path/…`) and empty-directory sweeps
+# (`Would remove (empty directory): /path`) are not packages and are skipped
+# in both forms.
 parse_cleanup_names() {
     awk '
         /^Would (uninstall|remove|untap).*:$/ { collecting = 1; next }
         /^Would / { collecting = 0 } # a new directive ends the block; inline rules below decide
         collecting && (/^[[:space:]]*$/ || /^Run `brew/) { collecting = 0; next }
         collecting { if ($1 !~ /^\//) print $1; next }
-        /^Would (uninstall|untap) [^:]/ { print $3 }
-        /^Would remove [^:\/]/ { print $3 }
+        /^Would (uninstall|untap) [^:(]/ { print $3 }
+        /^Would remove [^:\/(]/ { print $3 }
     '
 }
 

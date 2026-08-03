@@ -54,6 +54,22 @@ EOF
     [ "$output" = "$(printf '0\t')" ]
 }
 
+@test "empty-directory sweeps are not packages" {
+    # Real `brew bundle cleanup` output (2026-08): empty-directory lines have
+    # `(` after "remove", slipping past the colon guard and yielding a phantom
+    # package literally named "(empty" per line.
+    run "$DRIFT_CHECK" --parse-cleanup <<'EOF'
+Would `brew cleanup`:
+Would remove: /Users/ed/Library/Caches/Homebrew/xz--5.8.3 (770.8KB)
+Would remove: /Users/ed/Library/Caches/Homebrew/Cask/lulu--4.4.3.dmg (7.3MB)
+Would remove (empty directory): /opt/homebrew/lib/gio/modules
+Would remove (empty directory): /opt/homebrew/lib/gio
+Run `brew bundle cleanup --force` to make these changes.
+EOF
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf '0\t')" ]
+}
+
 @test "mixed modern blocks and cache paths: only packages counted" {
     run "$DRIFT_CHECK" --parse-cleanup <<'EOF'
 Would uninstall casks:
