@@ -190,6 +190,16 @@ defaults write com.apple.Safari SearchProviderShortName -string "DuckDuckGo" 2>/
 defaults write com.apple.Safari AutoOpenSafeDownloads -bool false 2>/dev/null || true
 
 # =============================================================================
+# Login window — app state restore
+# =============================================================================
+
+# Don't reopen apps after logout/restart. State restore silently resurrects
+# heavyweight apps (PyCharm, browsers with WebRTC tabs) at every login, so
+# "I closed everything" stops being true after the next reboot. Apps you want
+# at login belong in Login Items, not in restored window state.
+defaults write com.apple.loginwindow TALLogoutSavesState -bool false
+
+# =============================================================================
 # iTerm2 — load preferences from chezmoi-managed directory
 # =============================================================================
 
