@@ -35,6 +35,7 @@ Older render patterns sometimes leave files in `$HOME` that chezmoi no longer tr
 - **SSH key passphrase missing** — Add interactively: `ssh-keygen -p -f ~/.ssh/<key>`. The repo does not (and will not) automate this. Optionally `ssh-add --apple-use-keychain ~/.ssh/<key>` to load it into the macOS keychain so daily git/ssh isn't friction.
 - **FileVault / SIP / firewall / guest account** — usually configured by `run_once_after_05-macos-sudo.sh` at bootstrap. If a finding appears later, re-run that script (it's idempotent) or address via System Settings.
 - **Sensitive file perms** — fix with `chmod 600 <path>`.
+- **Energy settings (pmset)** — expected values live in `dot_config/chezmoi/scripts/executable_macos-sudo.sh`; re-run `~/.config/chezmoi/scripts/macos-sudo.sh` to re-assert. Note the idle sleep timer is only half the story: any app holding a power assertion overrides it (`pmset -g assertions` names the holders). Known quiet offenders when the Mac is unexpectedly hot or won't sleep: browser tabs with live WebRTC connections (WhatsApp Web, Meet, etc. — "WebRTC has active PeerConnections"), Amphetamine sessions, and `caffeinate`. The OrbStack VM doesn't hold assertions but runs whenever the Mac is awake, so it burns CPU for as long as anything else keeps the machine up.
 - **Pending macOS updates** — `softwareupdate -ia` (interactive; may reboot).
 
 After addressing a finding, `chezmoi-drift-check --full` (or just `mac` again) refreshes the cache.

@@ -84,9 +84,14 @@ fi
 # Display sleep: 10 minutes
 sudo pmset -a displaysleep 10
 
-# System sleep: 30 minutes on battery, never on AC
+# System sleep: 30 minutes on battery AND on AC. AC was previously 0 (never
+# sleep), which kept the machine awake — and hot — overnight whenever it was
+# left on the charger: background residents (OrbStack VM, PyCharm, browser
+# tabs) run indefinitely because the idle timer never fires. For deliberate
+# keep-awake (long builds, overnight jobs) use Amphetamine or `caffeinate`,
+# which hold explicit assertions instead of disabling sleep permanently.
 sudo pmset -b sleep 30
-sudo pmset -c sleep 0
+sudo pmset -c sleep 30
 
 # Disable Power Nap (background syncing while sleeping)
 sudo pmset -a powernap 0

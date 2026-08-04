@@ -25,7 +25,8 @@ chezmoi-security-audit [--drift] [--quiet] [-h]
 Checks: FileVault, SIP, Gatekeeper, firewall+stealth, guest account, auto-login,
 remote Apple Events, SSH remote login, SSH key passphrase,
 AWS creds perms, age key perms, GPG signing key expiry (if configured),
-auto-update toggles, softwareupdate pending.
+auto-update toggles, energy settings (pmset sleep/displaysleep/powernap),
+softwareupdate pending.
 
 Exit codes: 0 clean, 1 drift, 2 audit error.
 EOF
@@ -284,6 +285,40 @@ if ((${#au_off[@]} == 0)); then
     check "Auto-update toggles" ok
 else
     check "Auto-update toggles" fail "disabled: ${au_off[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
+fi
+
+# ------------------------------------------------------------------------------
+# Energy settings — the pmset values run_once_after_05-macos-sudo.sh sets.
+# Expected values are hardcoded to mirror executable_macos-sudo.sh (same
+# pattern as the auto-update toggles above). pmset drift is real and silent:
+# AC sleep was found drifted to 1 in Aug 2026 with nothing flagging it, after
+# the machine spent four days awake on the charger. `pmset -g custom` needs
+# no sudo.
+# ------------------------------------------------------------------------------
+pm_custom=$(pmset -g custom 2>/dev/null)
+pm_get() {
+    printf '%s\n' "$pm_custom" | awk -v src="$1" -v key="$2" '
+        /^Battery Power:/ { sec = "Battery" }
+        /^AC Power:/ { sec = "AC" }
+        sec == src && $1 == key { print $2; exit }'
+}
+if [[ -z $pm_custom ]]; then
+    check "Energy settings (pmset)" skip
+else
+    pm_bad=()
+    for pm_src in Battery AC; do
+        for pm_pair in sleep=30 displaysleep=10 powernap=0; do
+            pm_key=${pm_pair%%=*}
+            pm_want=${pm_pair##*=}
+            pm_live=$(pm_get "$pm_src" "$pm_key")
+            [[ $pm_live == "$pm_want" ]] || pm_bad+=("$pm_src $pm_key=${pm_live:-unset} (want $pm_want)")
+        done
+    done
+    if ((${#pm_bad[@]} == 0)); then
+        check "Energy settings (pmset)" ok
+    else
+        check "Energy settings (pmset)" fail "${pm_bad[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
+    fi
 fi
 
 # ------------------------------------------------------------------------------
