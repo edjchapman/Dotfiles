@@ -6,6 +6,9 @@
 #   - $HOME files chezmoi manages (via `chezmoi status --exclude=externals`)
 #   - Brewfile.tmpl: missing entries (`brew bundle check`),
 #     extras (`brew bundle cleanup` dry-run)
+#   - Daily `brewup` outcome (marker file written by the dot_zshrc runner).
+#     Not drift as such, but a maintenance outage that is otherwise invisible
+#     unless someone reads ~/.cache/brewup.log by hand.
 #
 # State file (sourced by the dot_zshrc banner block) is written atomically via
 # tmp+mv so concurrent writers (launchd, brew wrapper, shell startup refresh)
@@ -15,6 +18,11 @@ set -uo pipefail
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-drift"
 STATE_FILE="$CACHE_DIR/state"
+# Written by the daily brewup runner in dot_zshrc: present => last run failed.
+# Deliberately $HOME/.cache and not $XDG_CACHE_HOME: the writer hardcodes that
+# path for every brewup file (stamp/log/lock), so honouring XDG here would read
+# a path nothing ever writes the moment XDG_CACHE_HOME is set.
+BREWUP_FAIL_MARKER="$HOME/.cache/brewup.failed"
 TTL="${CHEZMOI_DRIFT_TTL:-14400}"
 MODE=brief
 NOTIFY=0
@@ -120,10 +128,19 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
     BREW_EXTRA=
     DEFAULTS_DRIFT=0
     SECURITY_DRIFT=0
+    BREWUP_FAILED=0
     HAD_ERROR=0
     summary=
     # shellcheck disable=SC1090
     . "$STATE_FILE" 2>/dev/null || true
+    # The brewup marker is a single file test, so re-check it live rather than
+    # trusting a cache entry that can be up to $TTL (4h) old. brewup runs from
+    # shell startup and can flip this at any point inside that window; a signal
+    # this cheap should never be reported stale. On disagreement, fall through
+    # to the full check so the rewritten state file stays self-consistent with
+    # the summary string emitted alongside it.
+    _brewup_live=0
+    [[ -f $BREWUP_FAIL_MARKER ]] && _brewup_live=1
     # Validate every required field parsed as a non-negative integer.
     # If any is missing/non-numeric, the cache file is partial or schema-drifted —
     # fall through to the full check rather than silently report stale counts.
@@ -134,6 +151,7 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
         $BREW_EXTRA =~ ^[0-9]+$ &&
         ${DEFAULTS_DRIFT:-0} =~ ^[0-9]+$ &&
         ${SECURITY_DRIFT:-0} =~ ^[0-9]+$ &&
+        ${BREWUP_FAILED:-0} == "$_brewup_live" &&
         -n $summary ]]; then
         emit "$summary"
         [[ ${HAD_ERROR:-0} -gt 0 ]] && exit 2
@@ -235,12 +253,19 @@ if command -v chezmoi-security-audit >/dev/null 2>&1; then
     fi
 fi
 
+# Daily brewup outcome. Presence of the marker means the last run failed; the
+# runner removes it on success. Purely a file test — never shells out to brew,
+# so this stays cheap enough for the shell-startup path.
+BREWUP_FAILED=0
+[[ -f $BREWUP_FAIL_MARKER ]] && BREWUP_FAILED=1
+
 parts=""
 [[ $HOME_DRIFT -gt 0 ]] && parts="${parts:+$parts, }home: $HOME_DRIFT"
 [[ $BREW_MISSING -gt 0 ]] && parts="${parts:+$parts, }brew-missing: $BREW_MISSING"
 [[ $BREW_EXTRA -gt 0 ]] && parts="${parts:+$parts, }brew-extra: $BREW_EXTRA"
 [[ $DEFAULTS_DRIFT -gt 0 ]] && parts="${parts:+$parts, }defaults: $DEFAULTS_DRIFT"
 [[ $SECURITY_DRIFT -gt 0 ]] && parts="${parts:+$parts, }security: $SECURITY_DRIFT"
+[[ $BREWUP_FAILED -eq 1 ]] && parts="${parts:+$parts, }brewup: failed"
 
 if [[ $HAD_ERROR -eq 1 ]]; then
     if [[ -n $parts ]]; then
@@ -263,6 +288,7 @@ if {
     printf 'BREW_EXTRA_NAMES=%q\n' "$BREW_EXTRA_NAMES"
     printf 'DEFAULTS_DRIFT=%s\n' "$DEFAULTS_DRIFT"
     printf 'SECURITY_DRIFT=%s\n' "$SECURITY_DRIFT"
+    printf 'BREWUP_FAILED=%s\n' "$BREWUP_FAILED"
     printf 'HAD_ERROR=%s\n' "$HAD_ERROR"
     printf 'CHECKED_AT=%s\n' "$(date +%s)"
     printf 'summary=%q\n' "$summary"

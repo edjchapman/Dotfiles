@@ -97,15 +97,20 @@ export ENABLE_TOOL_SEARCH=auto:5
 # Suppress Homebrew informational hints while keeping automatic updates enabled
 export HOMEBREW_NO_ENV_HINTS=1
 
-# Homebrew daily maintenance: upgrade, sanity-check, cleanup
+# Homebrew daily maintenance: upgrade, sanity-check, cleanup.
+# Returns non-zero when the upgrade failed, but still runs doctor and cleanup:
+# an early `return 1` here let one wedged package (a cask whose staging dir was
+# left occupied by an interrupted upgrade) silently disable doctor and cleanup
+# for days, so stale downloads accumulated while nothing reported a problem.
 brewup() {
   emulate -L zsh
   setopt pipefail
+  local rc=0
 
   print -P "\n%F{cyan}==> brew upgrade%f"
   if ! command brew upgrade; then
     print -P "%F{red}brew upgrade failed%f"
-    return 1
+    rc=1
   fi
 
   print -P "\n%F{cyan}==> brew doctor%f"
@@ -116,7 +121,12 @@ brewup() {
   print -P "\n%F{cyan}==> brew cleanup%f"
   command brew cleanup
 
-  print -P "\n%F{green}Done.%f\n"
+  if (( rc == 0 )); then
+    print -P "\n%F{green}Done.%f\n"
+  else
+    print -P "\n%F{red}Done, with a failed upgrade — see 'brewlog'.%f\n"
+  fi
+  return $rc
 }
 
 # Auto-run brewup once per day on first shell. Output is appended to
@@ -124,6 +134,7 @@ brewup() {
 # A directory-based lock prevents concurrent runs when multiple shells
 # open in quick succession. Stale locks (>1h) are cleared on next entry.
 BREWUP_STAMP="$HOME/.cache/brewup.last"
+BREWUP_FAIL="$HOME/.cache/brewup.failed"
 BREWUP_LOG="$HOME/.cache/brewup.log"
 BREWUP_LOCK="$HOME/.cache/brewup.lock"
 mkdir -p "$HOME/.cache"
@@ -144,8 +155,19 @@ if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/nul
       {
         echo "=== brewup $(date '+%Y-%m-%d %H:%M:%S') ==="
         if brewup; then
-          date +%F >| "$BREWUP_STAMP"
+          rm -f "$BREWUP_FAIL"
+        else
+          # Failure marker, read by chezmoi-drift-check and surfaced as a
+          # 'brewup-failed' banner segment. Stamping unconditionally below
+          # would otherwise make a failure completely silent.
+          date '+%Y-%m-%d %H:%M:%S' >| "$BREWUP_FAIL"
         fi
+        # Stamp regardless of outcome: this guard means "attempted today", not
+        # "succeeded today". Stamping only on success turned a persistently
+        # failing upgrade into one brewup per new shell — 50 runs in a day,
+        # each re-mounting a cached 276MB DMG, with doctor/cleanup never
+        # reached. A wedged package now costs one run per day, as intended.
+        date +%F >| "$BREWUP_STAMP"
       } >>"$BREWUP_LOG" 2>&1
       tail -n 2000 "$BREWUP_LOG" >"$BREWUP_LOG.tmp" 2>/dev/null && mv "$BREWUP_LOG.tmp" "$BREWUP_LOG"
     fi
@@ -187,10 +209,14 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
     (( ${BREW_EXTRA:-0} > 0 ))     && _parts+="${_parts:+ · }brew-extra ${BREW_EXTRA}"
     (( ${DEFAULTS_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }defaults ${DEFAULTS_DRIFT}"
     (( ${SECURITY_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }security ${SECURITY_DRIFT}"
+    # Daily brewup failed and has stayed failed. Its own segment rather than a
+    # count: this is a maintenance outage, not $HOME drift, and the fix is to
+    # read the log rather than to apply or re-add anything.
+    [[ "${BREWUP_FAILED:-0}" == "1" ]] && _parts+="${_parts:+ · }brewup-failed"
     # A check error is surfaced as its own segment so it is never masked by
     # (or mistaken for) real drift counts.
     [[ "${HAD_ERROR:-0}" == "1" ]] && _parts+="${_parts:+ · }check-error"
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT HAD_ERROR CHECKED_AT summary
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT BREWUP_FAILED HAD_ERROR CHECKED_AT summary
   fi
   unset _drift_state
 

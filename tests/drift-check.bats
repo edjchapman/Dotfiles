@@ -6,6 +6,8 @@
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     DRIFT_CHECK="$REPO_ROOT/dot_local/bin/executable_chezmoi-drift-check"
+    ZSHRC="$REPO_ROOT/dot_zshrc"
+    CHEZMOI_FIX="$REPO_ROOT/dot_local/bin/executable_chezmoi-fix"
 }
 
 @test "modern block output: counts package names, not header lines" {
@@ -93,4 +95,39 @@ EOF
     # chezmoi + brew).
     run grep -n "BREW_EXTRA_NAMES=%q" "$DRIFT_CHECK"
     [ "$status" -eq 0 ]
+}
+
+@test "state file writer includes BREWUP_FAILED" {
+    run grep -n "BREWUP_FAILED=%s" "$DRIFT_CHECK"
+    [ "$status" -eq 0 ]
+}
+
+@test "brewup marker path agrees across writer and both readers" {
+    # dot_zshrc writes the marker; drift-check and chezmoi-fix read it. These
+    # live in three separate files with no shared constant, so a path edit in
+    # one is silently a no-op signal. Pin the literal in all three.
+    local marker='$HOME/.cache/brewup.failed'
+    run grep -F -- "$marker" "$ZSHRC"
+    [ "$status" -eq 0 ]
+    run grep -F -- "$marker" "$DRIFT_CHECK"
+    [ "$status" -eq 0 ]
+    run grep -F -- "$marker" "$CHEZMOI_FIX"
+    [ "$status" -eq 0 ]
+}
+
+@test "brewup daily stamp is written unconditionally" {
+    # Regression guard. Stamping only inside the success branch turned any
+    # persistent upgrade failure into one brewup per new shell instead of one
+    # per day. The stamp must not be the body of `if brewup; then`.
+    run bash -c "grep -A1 'if brewup; then' '$ZSHRC' | grep -c 'BREWUP_STAMP'"
+    [ "$output" = "0" ]
+}
+
+@test "brewup runs doctor and cleanup even when upgrade fails" {
+    # The old `return 1` on upgrade failure skipped both. Assert the failure
+    # path sets a return code rather than returning early.
+    run bash -c "sed -n '/^brewup()/,/^}/p' '$ZSHRC' | grep -c 'return 1'"
+    [ "$output" = "0" ]
+    run bash -c "sed -n '/^brewup()/,/^}/p' '$ZSHRC' | grep -c 'command brew cleanup'"
+    [ "$output" = "1" ]
 }

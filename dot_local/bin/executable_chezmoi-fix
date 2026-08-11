@@ -26,6 +26,18 @@ plural() {
 # `uninstall` (which would look for a formula named after the tap and fail).
 is_brew_tap() { [[ $1 == */* && $1 != */*/* ]]; }
 
+# Reported rather than offered as a menu action: the failure modes (a wedged
+# cask staging dir, a tap fetch error, a full disk) have no safe generic
+# remedy, so the useful move is to show the tail and let the user decide.
+brewup_failed_notice() {
+    local marker="$HOME/.cache/brewup.failed"
+    local when=
+    [[ -f $marker ]] && when=$(<"$marker")
+    echo "   brewup: last daily run FAILED${when:+ (${when})}"
+    echo "   hint: 'brewlog' tails ~/.cache/brewup.log; the upgrade error is"
+    echo "   under the most recent '=== brewup' header. Re-run with 'brewup'."
+}
+
 # Test hook: `chezmoi-fix --is-tap <name>` exits 0 if <name> is a bare tap, 1
 # otherwise — lets bats-core verify tap detection without the interactive flow.
 if [[ ${1:-} == --is-tap ]]; then
@@ -83,6 +95,7 @@ BREW_EXTRA=0
 BREW_EXTRA_NAMES=
 DEFAULTS_DRIFT=0
 SECURITY_DRIFT=0
+BREWUP_FAILED=0
 HAD_ERROR=0
 summary=
 if [[ -f $DRIFT_STATE ]]; then
@@ -104,10 +117,20 @@ if ((${HAD_ERROR:-0} > 0)); then
     echo "   Brewfile.tmpl kills the brew counts); 'chezmoi doctor' checks the env."
 elif ((total == 0)); then
     echo "   No drift detected. ${summary:-drift: clean}"
-    echo "   Nothing to fix."
-    exit 0
+    # A failed brewup is not drift and contributes nothing to $total, so it must
+    # be reported before the clean-state early exit — otherwise the one command
+    # the banner tells you to run would answer "nothing to fix" while daily
+    # maintenance stays broken. Fall through to the menu rather than exiting, so
+    # the audit entries stay reachable while brewup is broken.
+    if ((${BREWUP_FAILED:-0} > 0)); then
+        brewup_failed_notice
+    else
+        echo "   Nothing to fix."
+        exit 0
+    fi
 else
     echo "   ${summary:-drift detected}"
+    ((${BREWUP_FAILED:-0} > 0)) && brewup_failed_notice
     ((inbox_count > 0)) && echo "   brew inbox: ${inbox_count} $(plural "$inbox_count" event) pending"
     if ((cached_drift_total > 0 && cached_drift_total != fresh_drift_total)); then
         echo "   (refreshed: banner showed ${cached_drift_total}, now ${fresh_drift_total})"

@@ -121,6 +121,39 @@ See [Brew sync runbook](runbooks/brew-sync.md).
 
 **Fix**: Just run `mac`. The cache rewrites.
 
+### Banner shows `brewup-failed`
+
+**Cause**: The daily `brewup` run exited non-zero and left `~/.cache/brewup.failed`. The marker is removed automatically by the next successful run.
+
+**Fix**:
+
+```bash
+brewlog          # tail ~/.cache/brewup.log; the error is under the newest '=== brewup' header
+brewup           # re-run once the cause is addressed
+```
+
+The most common cause is a **wedged cask staging directory**. An interrupted cask upgrade leaves the old app behind in the Caskroom, and every later upgrade aborts with:
+
+```text
+Error: <cask>: It seems there is already an App at
+'/opt/homebrew/Caskroom/<cask>/<old-version>/<Name>.app'.
+```
+
+A full app inside a Caskroom version directory is always wreckage — Homebrew *moves* cask apps to `/Applications` and leaves only metadata behind. Clear it and reinstall:
+
+```bash
+rm -rf "/opt/homebrew/Caskroom/<cask>/<old-version>"
+brew install --cask --force <cask>
+```
+
+Never use `brew uninstall --zap` here: `--zap` deletes application support data (browser profiles, bookmarks, licences), not just the app.
+
+### `brew upgrade` touches a self-updating app (Chrome, Brave, NordVPN)
+
+**Not a bug.** Casks marked `auto_updates true` are normally skipped without `--greedy`, but `HOMEBREW_UPGRADE_AUTO_UPDATES_CASKS` defaults to on, so Homebrew reads the real version out of the installed app's `Info.plist` and re-syncs when the app has fallen behind the tap. That is how an app updated in place by its own updater (Chrome's Keystone, which writes to `/Applications` as root) gets reconciled with Homebrew's records.
+
+Keep these casks tracked in `Brewfile.tmpl` — `brew bundle check` only tests presence, not version, so a self-updated app still satisfies it. To opt out of the reconciliation, set `HOMEBREW_NO_UPGRADE_AUTO_UPDATES_CASKS=1`.
+
 ### Daily 09:30 notification didn't fire
 
 **Cause**: LaunchAgent not loaded, or screen was locked at 09:30 and the OS deferred it past midnight.
