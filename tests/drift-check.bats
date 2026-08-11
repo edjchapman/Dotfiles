@@ -118,8 +118,56 @@ EOF
 @test "brewup daily stamp is written unconditionally" {
     # Regression guard. Stamping only inside the success branch turned any
     # persistent upgrade failure into one brewup per new shell instead of one
-    # per day. The stamp must not be the body of `if brewup; then`.
-    run bash -c "grep -A1 'if brewup; then' '$ZSHRC' | grep -c 'BREWUP_STAMP'"
+    # per day. Nothing may branch on brewup's exit status in the daily runner —
+    # `if brewup; then` is the shape that made success-gated state possible.
+    run bash -c "grep -c 'if brewup; then' '$ZSHRC'"
+    [ "$output" = "0" ]
+    run bash -c "grep -c 'date +%F >| \"\$BREWUP_STAMP\"' '$ZSHRC'"
+    [ "$output" = "1" ]
+}
+
+@test "brewup owns its failure marker, not the daily runner" {
+    # The marker must be set/cleared inside brewup() so that *any* invocation
+    # updates it. While the daily runner owned it, a manual `brewup` could
+    # neither clear a stale marker nor record a fresh failure — a successful
+    # manual run left the banner reporting an already-fixed failure.
+    run bash -c "sed -n '/^brewup()/,/^}/p' '$ZSHRC' | grep -c 'rm -f \"\$marker\"'"
+    [ "$output" = "1" ]
+    run bash -c "sed -n '/^brewup()/,/^}/p' '$ZSHRC' | grep -c '>| \"\$marker\"'"
+    [ "$output" = "1" ]
+}
+
+@test "brewup sets the marker on failure and clears it on success" {
+    # Behavioural counterpart to the grep guards above. Extracts brewup() and
+    # runs it against a stubbed brew, so no real packages are touched.
+    command -v zsh >/dev/null || skip "zsh not available"
+    tmp="$(mktemp -d)"
+    sed -n '/^brewup()/,/^}/p' "$ZSHRC" >"$tmp/brewup.zsh"
+    mkdir -p "$tmp/bin"
+    printf '#!/bin/sh\n[ "$1" = "upgrade" ] && [ "${FAIL_UPGRADE:-0}" = "1" ] && exit 1\nexit 0\n' \
+        >"$tmp/bin/brew"
+    chmod +x "$tmp/bin/brew"
+
+    # A failing upgrade records the marker and returns non-zero.
+    run env FAIL_UPGRADE=1 PATH="$tmp/bin:$PATH" BREWUP_FAIL="$tmp/marker" \
+        zsh -c "source '$tmp/brewup.zsh'; brewup"
+    [ "$status" -ne 0 ]
+    [ -f "$tmp/marker" ]
+
+    # A later successful run clears it. This is the case the daily-runner-owned
+    # marker could never handle: a manual `brewup` left the stale marker in
+    # place, so the banner kept reporting an already-fixed failure.
+    run env FAIL_UPGRADE=0 PATH="$tmp/bin:$PATH" BREWUP_FAIL="$tmp/marker" \
+        zsh -c "source '$tmp/brewup.zsh'; brewup"
+    [ "$status" -eq 0 ]
+    [ ! -f "$tmp/marker" ]
+
+    rm -rf "$tmp"
+}
+
+@test "daily runner no longer touches the marker directly" {
+    # Ownership is single-sited: the runner writes only the stamp.
+    run bash -c "sed -n '/Auto-run brewup once per day/,\$p' '$ZSHRC' | grep -c 'BREWUP_FAIL\b'"
     [ "$output" = "0" ]
 }
 

@@ -97,15 +97,33 @@ export ENABLE_TOOL_SEARCH=auto:5
 # Suppress Homebrew informational hints while keeping automatic updates enabled
 export HOMEBREW_NO_ENV_HINTS=1
 
+# Homebrew maintenance paths. Defined ahead of brewup() so the function can own
+# its own failure-marker bookkeeping.
+BREWUP_STAMP="$HOME/.cache/brewup.last"
+BREWUP_FAIL="$HOME/.cache/brewup.failed"
+BREWUP_LOG="$HOME/.cache/brewup.log"
+BREWUP_LOCK="$HOME/.cache/brewup.lock"
+mkdir -p "$HOME/.cache"
+
 # Homebrew daily maintenance: upgrade, sanity-check, cleanup.
 # Returns non-zero when the upgrade failed, but still runs doctor and cleanup:
 # an early `return 1` here let one wedged package (a cask whose staging dir was
 # left occupied by an interrupted upgrade) silently disable doctor and cleanup
 # for days, so stale downloads accumulated while nothing reported a problem.
+#
+# Owns the failure marker that chezmoi-drift-check reads. It lives here rather
+# than in the daily runner below because "did brewup succeed" is a property of
+# this function, not of whichever scheduler called it. While the runner owned
+# it, a manual `brewup` could neither clear a stale marker nor record a fresh
+# failure — so a successful manual run left the banner reporting a failure that
+# had already been fixed.
 brewup() {
   emulate -L zsh
   setopt pipefail
   local rc=0
+  # Default mirrors the assignment above so the function stays correct if it is
+  # ever called before/without that block (e.g. sourced in isolation).
+  local marker="${BREWUP_FAIL:-$HOME/.cache/brewup.failed}"
 
   print -P "\n%F{cyan}==> brew upgrade%f"
   if ! command brew upgrade; then
@@ -122,8 +140,10 @@ brewup() {
   command brew cleanup
 
   if (( rc == 0 )); then
+    rm -f "$marker"
     print -P "\n%F{green}Done.%f\n"
   else
+    date '+%Y-%m-%d %H:%M:%S' >| "$marker"
     print -P "\n%F{red}Done, with a failed upgrade — see 'brewlog'.%f\n"
   fi
   return $rc
@@ -133,11 +153,7 @@ brewup() {
 # ~/.cache/brewup.log (last ~2000 lines kept); `brewlog` tails it.
 # A directory-based lock prevents concurrent runs when multiple shells
 # open in quick succession. Stale locks (>1h) are cleared on next entry.
-BREWUP_STAMP="$HOME/.cache/brewup.last"
-BREWUP_FAIL="$HOME/.cache/brewup.failed"
-BREWUP_LOG="$HOME/.cache/brewup.log"
-BREWUP_LOCK="$HOME/.cache/brewup.lock"
-mkdir -p "$HOME/.cache"
+# Paths are defined above, next to brewup() itself.
 
 if [[ -d "$BREWUP_LOCK" ]]; then
   # Use the absolute BSD stat: Homebrew coreutils may shadow it on PATH with
@@ -154,19 +170,13 @@ if [[ ! -f "$BREWUP_STAMP" || "$(date +%F)" != "$(cat "$BREWUP_STAMP" 2>/dev/nul
       trap 'rmdir "$BREWUP_LOCK" 2>/dev/null' EXIT INT TERM HUP
       {
         echo "=== brewup $(date '+%Y-%m-%d %H:%M:%S') ==="
-        if brewup; then
-          rm -f "$BREWUP_FAIL"
-        else
-          # Failure marker, read by chezmoi-drift-check and surfaced as a
-          # 'brewup-failed' banner segment. Stamping unconditionally below
-          # would otherwise make a failure completely silent.
-          date '+%Y-%m-%d %H:%M:%S' >| "$BREWUP_FAIL"
-        fi
-        # Stamp regardless of outcome: this guard means "attempted today", not
-        # "succeeded today". Stamping only on success turned a persistently
-        # failing upgrade into one brewup per new shell — 50 runs in a day,
-        # each re-mounting a cached 276MB DMG, with doctor/cleanup never
-        # reached. A wedged package now costs one run per day, as intended.
+        # brewup() owns the failure marker; this runner owns only the daily
+        # stamp. Stamp regardless of outcome: the guard means "attempted
+        # today", not "succeeded today". Stamping only on success turned a
+        # persistently failing upgrade into one brewup per new shell — 50 runs
+        # in a day, each re-mounting a cached 276MB DMG, with doctor/cleanup
+        # never reached. A wedged package now costs one run per day.
+        brewup
         date +%F >| "$BREWUP_STAMP"
       } >>"$BREWUP_LOG" 2>&1
       tail -n 2000 "$BREWUP_LOG" >"$BREWUP_LOG.tmp" 2>/dev/null && mv "$BREWUP_LOG.tmp" "$BREWUP_LOG"
