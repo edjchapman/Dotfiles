@@ -41,6 +41,9 @@ brew "restic"
 brew "ripgrep"
 brew "rsync"
 brew "ruby"
+{{ if eq .machine_type "personal" -}}
+brew "sherlock"
+{{ end -}}
 brew "tlrc"
 brew "tree"
 brew "valkey"
