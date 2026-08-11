@@ -33,7 +33,7 @@ teardown() {
 # Helper: write a state file with named overrides; missing fields default to 0.
 write_state() {
     local home_drift=0 brew_missing=0 brew_extra=0 brew_extra_names="" defaults_drift=0
-    local security_drift=0 had_error=0 checked_at summary="drift: clean"
+    local security_drift=0 brewup_failed=0 had_error=0 checked_at summary="drift: clean"
     checked_at=$(date +%s)
     while (($# > 0)); do
         case "$1" in
@@ -43,6 +43,7 @@ write_state() {
             extra_names=*) brew_extra_names=${1#extra_names=} ;;
             defaults=*) defaults_drift=${1#defaults=} ;;
             security=*) security_drift=${1#security=} ;;
+            brewup=*) brewup_failed=${1#brewup=} ;;
             error=*) had_error=${1#error=} ;;
             summary=*) summary=${1#summary=} ;;
         esac
@@ -55,6 +56,7 @@ BREW_EXTRA=$brew_extra
 BREW_EXTRA_NAMES='$brew_extra_names'
 DEFAULTS_DRIFT=$defaults_drift
 SECURITY_DRIFT=$security_drift
+BREWUP_FAILED=$brewup_failed
 HAD_ERROR=$had_error
 CHECKED_AT=$checked_at
 summary='$summary'
@@ -66,6 +68,40 @@ EOF
     run "$FIX"
     [ "$status" -eq 0 ]
     [[ "$output" == *"No drift detected"* ]]
+}
+
+@test "failed brewup is reported even when there is no drift" {
+    # BREWUP_FAILED contributes nothing to $total, so without an explicit check
+    # the clean-state early exit would print "Nothing to fix" while daily brew
+    # maintenance stays broken — the exact silence this signal exists to end.
+    write_state brewup=1 summary='drift: clean'
+    HOME="$TMPHOME" run "$FIX"
+    [[ "$output" == *"last daily run FAILED"* ]]
+    [[ "$output" != *"Nothing to fix"* ]]
+}
+
+@test "failed brewup still renders the menu rather than exiting early" {
+    write_state brewup=1 summary='drift: clean'
+    HOME="$TMPHOME" run "$FIX"
+    [[ "$output" == *"brewlog"* ]]
+    # Audit/doctor entries remain reachable while brewup is broken.
+    [[ "$output" == *"dismiss"* || "$output" == *"doctor"* ]]
+}
+
+@test "failed brewup notice includes the recorded failure time" {
+    write_state brewup=1 summary='drift: clean'
+    mkdir -p "$TMPHOME/.cache"
+    echo "2026-08-11 14:34:58" >"$TMPHOME/.cache/brewup.failed"
+    HOME="$TMPHOME" run "$FIX"
+    [[ "$output" == *"2026-08-11 14:34:58"* ]]
+}
+
+@test "clean state with no brewup failure still exits quietly" {
+    write_state brewup=0 summary='drift: clean'
+    HOME="$TMPHOME" run "$FIX"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Nothing to fix"* ]]
+    [[ "$output" != *"FAILED"* ]]
 }
 
 @test "single security failure uses singular 'failure'" {
