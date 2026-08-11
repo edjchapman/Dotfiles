@@ -94,7 +94,10 @@ jobs:
         steps:
             - uses: actions/checkout@v7
             - name: Install bats-core
-              run: sudo apt-get update && sudo apt-get install -y bats
+              # zsh: the brewup marker test sources the zsh function from dot_zshrc
+              # and exercises it against a stubbed brew. Without zsh the test skips,
+              # which would silently drop coverage of the fix it guards.
+              run: sudo apt-get update && sudo apt-get install -y bats zsh
             - name: Run bats
               run: make test-bats
 
