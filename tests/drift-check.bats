@@ -265,6 +265,21 @@ EOF
     [ ! -f "$TMPHOME/chezmoi-invoked" ]
 }
 
+@test "--brief falls through to a full check once the cache goes stale" {
+    # The other half of the cache-freshness contract. Without this, a broken
+    # freshness test that answered "never fresh" would still pass the tests
+    # above — which is exactly the state this script was in: `stat -f %m` runs
+    # as GNU stat on a machine with coreutils ahead of /usr/bin on PATH, prints
+    # filesystem info to stdout, exits 1, and left mtime unparseable. The fast
+    # path was unreachable and nothing said so.
+    make_minimal_stubs
+    write_state home=2
+    touch -t 202001010000 "$STATE"
+
+    run "$DRIFT_CHECK" --brief --quiet
+    [ -f "$TMPHOME/chezmoi-invoked" ]
+}
+
 @test "--brief exits clean on a cached zero total" {
     make_minimal_stubs
     write_state summary='drift: clean'
