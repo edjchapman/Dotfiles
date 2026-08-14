@@ -47,10 +47,28 @@ git commit -m "chore(secrets): rotate AWS key"
 
 If `git diff --stat` shows any non-`.age` file containing a credential, **stop**. Run `git restore --staged <file>` and figure out where the plaintext came from before continuing.
 
+## Rotate `BOT_PAT` (the CI bot token)
+
+`BOT_PAT` is a **GitHub Actions secret**, not an age blob — nothing in this repo holds it and chezmoi plays no part. Five workflows read it, each falling back to `GITHUB_TOKEN` when it is unset: `auto-rebase`, `update-externals`, `update-mas`, `update-precommit`, `update-vscode`. It exists so bot-authored PRs trigger CI; a `GITHUB_TOKEN`-authored PR would not (GitHub's anti-recursion guard).
+
+```bash
+# 1. Create a fine-grained PAT scoped to this repository, with
+#    Contents: read and write, and Pull requests: read and write.
+# 2. Store it (paste at the prompt):
+gh secret set BOT_PAT --repo edjchapman/dotfiles
+
+# 3. Confirm a previously failing workflow now passes.
+gh workflow run auto-rebase.yml
+```
+
+**Record the expiry date somewhere you will see it.** A dead `BOT_PAT` is not obvious: `auto-rebase` fails immediately because the token sits on its `checkout` step, but the four `update-*` workflows only touch it when they actually have something to raise a PR for — so they report green while their `Create draft PR` step is `skipped`. That combination hid a revoked PAT from 2026-06-23 to 2026-08-14. Every workflow's first step now validates the token and fails with an explicit message naming the secret and the remedy.
+
+To retire the PAT instead, delete the secret — each workflow falls back to `GITHUB_TOKEN`, at the cost of bot PRs no longer auto-triggering CI.
+
 ## Rotate the age key itself
 
 !!! danger "Destructive — back up first"
-    This rewrites every `*.age` blob in the repo. **Confirm the new key is backed up to your password manager before proceeding.** If anything fails after step 5 (key swap), recovery requires the new key.
+This rewrites every `*.age` blob in the repo. **Confirm the new key is backed up to your password manager before proceeding.** If anything fails after step 5 (key swap), recovery requires the new key.
 
 This is a much bigger operation. The age key decrypts every `.age` file in the repo, so rotating it requires re-encrypting all of them.
 
@@ -113,7 +131,7 @@ The old recipient is now public history — that's fine. Only the new private ke
 
 ## Back up the age key
 
-The age private key at `~/.config/chezmoi/key.txt` is a one-of-one failure mode: if it's only on this Mac and the disk dies, you lose decryption access to every `*.age` blob in the repo. The underlying secrets (AWS keys, PATs) are mostly *re-issuable* upstream, but bootstrap day is annoying. Back the key up after first-time generation, and again after every rotation.
+The age private key at `~/.config/chezmoi/key.txt` is a one-of-one failure mode: if it's only on this Mac and the disk dies, you lose decryption access to every `*.age` blob in the repo. The underlying secrets (AWS keys, PATs) are mostly _re-issuable_ upstream, but bootstrap day is annoying. Back the key up after first-time generation, and again after every rotation.
 
 ### What to back up
 
@@ -121,12 +139,12 @@ The complete contents of `~/.config/chezmoi/key.txt` — all three lines (`# cre
 
 ### Strategies (pick one — multiple is better)
 
-| Strategy | Trust boundary | Online? | Friction (recovery) | Single point of failure |
-|---|---|---|---|---|
-| **Password manager** (recommended) | Master credential + 2FA | Yes | Low — open vault, copy-paste | Vault provider |
-| **Passphrase-encrypted blob in cloud** | Cloud account + age passphrase | Yes | Medium — download + `age -d -p` | Forgotten passphrase |
-| **Hardware USB (encrypted)** | Physical access | No | Medium — locate USB, mount, copy | USB lost/damaged |
-| **Paper print (fireproof safe)** | Physical access | No | High — type ~200 bytes by hand | Fire/water; misfiled |
+| Strategy                               | Trust boundary                 | Online? | Friction (recovery)              | Single point of failure |
+| -------------------------------------- | ------------------------------ | ------- | -------------------------------- | ----------------------- |
+| **Password manager** (recommended)     | Master credential + 2FA        | Yes     | Low — open vault, copy-paste     | Vault provider          |
+| **Passphrase-encrypted blob in cloud** | Cloud account + age passphrase | Yes     | Medium — download + `age -d -p`  | Forgotten passphrase    |
+| **Hardware USB (encrypted)**           | Physical access                | No      | Medium — locate USB, mount, copy | USB lost/damaged        |
+| **Paper print (fireproof safe)**       | Physical access                | No      | High — type ~200 bytes by hand   | Fire/water; misfiled    |
 
 Details:
 

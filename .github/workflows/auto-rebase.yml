@@ -27,6 +27,24 @@ jobs:
         name: Rebase open PRs onto main
         runs-on: ubuntu-latest
         steps:
+            - name: Verify BOT_PAT is usable
+              # A revoked or expired PAT surfaces from git only as `could not
+              # read Username for 'https://github.com'` — an error naming
+              # neither the token nor the secret, which is how this went seven
+              # weeks unnoticed from 2026-06-23. Fail here, naming the remedy.
+              env:
+                  BOT_PAT: ${{ secrets.BOT_PAT }}
+              run: |
+                  if [ -z "${BOT_PAT:-}" ]; then
+                      echo "BOT_PAT unset - falling back to GITHUB_TOKEN."
+                      exit 0
+                  fi
+                  if ! GH_TOKEN="$BOT_PAT" gh api "repos/$GITHUB_REPOSITORY" --silent; then
+                      echo "::error::BOT_PAT is set but GitHub rejected it (expired or revoked). Rotate it at Settings > Secrets and variables > Actions > BOT_PAT, or delete the secret to fall back to GITHUB_TOKEN."
+                      exit 1
+                  fi
+                  echo "BOT_PAT accepted."
+
             - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
