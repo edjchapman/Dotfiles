@@ -139,13 +139,13 @@ All secrets live in the repo as `*.age` blobs. The recipient (public key) is in 
 Three signals continuously check `$HOME` against the source state. All three feed a single cache (`~/.cache/chezmoi-drift/state`), which the `mac` command consumes:
 
 === "Shell banner"
-    Every new terminal sources `~/.zshrc`, which calls `chezmoi-drift-check` from a non-blocking subshell. Output appears as a banner at the top of the prompt if anything is pending.
+    Every new terminal sources `~/.zshrc`, which reads the cache file directly — no subprocess on the startup path — and prints a banner at the top of the prompt if anything is pending. The drift segments of that line are composed by `chezmoi-drift-check` when it writes the cache, so the banner and `mac` cannot disagree; the shell only adds the live parts (pending brew-inbox count, cache age). A refresh of the cache *is* spawned in the background, but only when the cached state is older than the TTL (default 4h).
 
 === "Daily LaunchAgent"
     A `LaunchAgent` fires at 09:30 daily, runs `chezmoi-drift-check`, and posts a clickable macOS notification if drift is detected. Clicking opens Terminal at `mac`.
 
 === "Brew wrapper"
-    A shell function wrapper around `brew` appends an NDJSON event to `~/.cache/brewup.log` on every `install/uninstall/upgrade`, so the next `chezmoi-brew-sync` knows what to merge into `Brewfile.tmpl`.
+    A shell function wrapper around `brew` appends an NDJSON event to the brew-inbox journal (`~/.cache/chezmoi-brew-inbox/journal.ndjson`) on every `install/uninstall/tap/untap`, so the next `chezmoi-brew-sync` knows what to merge into `Brewfile.tmpl`. This is a different file from `~/.cache/brewup.log`, which is the plain-text output of the daily `brewup` run.
 
 Together: drift becomes *visible* in seconds and *fixable* with one command. See [Recover from drift](runbooks/recover-from-drift.md) for the per-signal remediation matrix.
 

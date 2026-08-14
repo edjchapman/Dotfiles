@@ -13,6 +13,17 @@
 # State file (sourced by the dot_zshrc banner block) is written atomically via
 # tmp+mv so concurrent writers (launchd, brew wrapper, shell startup refresh)
 # never leave a partially-written file for the synchronous reader.
+#
+# Schema — UPPERCASE fields are raw counted signals, lowercase fields are
+# values this script derives from them. Full breakdown, including what to do
+# about each, is in docs/runbooks/recover-from-drift.md.
+#   HOME_DRIFT BREW_MISSING BREW_EXTRA DEFAULTS_DRIFT SECURITY_DRIFT  counts
+#   BREW_EXTRA_NAMES BREWUP_FAILED HAD_ERROR CHECKED_AT               signals
+#   summary       notification/CLI line ("drift: home: 2, brew-extra: 5")
+#   banner        prompt-banner segments ("home 2 · brew-extra 5"); may be empty
+#   drift_total   sum of the five counts
+# Readers must treat `banner` and `drift_total` as optional: a cache written
+# before they existed can survive for up to $TTL.
 
 set -uo pipefail
 
@@ -131,6 +142,9 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
     BREWUP_FAILED=0
     HAD_ERROR=0
     summary=
+    # Left empty rather than 0 so that "absent from an older cache" is
+    # distinguishable from "present and genuinely zero" below.
+    drift_total=
     # shellcheck disable=SC1090
     . "$STATE_FILE" 2>/dev/null || true
     # The brewup marker is a single file test, so re-check it live rather than
@@ -155,7 +169,17 @@ if [[ $MODE == "brief" ]] && cache_fresh; then
         -n $summary ]]; then
         emit "$summary"
         [[ ${HAD_ERROR:-0} -gt 0 ]] && exit 2
-        [[ $((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0})) -gt 0 ]] && exit 1
+        # drift_total is composed by the full check alongside the counts it
+        # sums, so it is trusted here rather than re-derived — re-deriving it
+        # would keep a hand-written sum alive at the one site this change
+        # exists to remove. A cache written before this field existed has no
+        # drift_total, so fall back to summing the counts it does carry. The
+        # counts-to-total invariant is asserted in tests/drift-check.bats.
+        if [[ $drift_total =~ ^[0-9]+$ ]]; then
+            [[ $drift_total -gt 0 ]] && exit 1
+        else
+            [[ $((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0})) -gt 0 ]] && exit 1
+        fi
         exit 0
     fi
     # Cache invalid; fall through to full check.
@@ -279,6 +303,39 @@ else
     summary="drift: $parts"
 fi
 
+# Banner string — the drift-derived segments of the one-line shell banner, in
+# the rendering dot_zshrc used to compose by hand from the raw count fields.
+# Composed here so the banner and this script can never disagree about what is
+# pending. Deliberately *not* the whole printed line: the `inbox N` segment is
+# recounted live on every shell start (freezing it into a TTL-bounded cache
+# would report a stale count exactly when a fresh `brew install` matters), and
+# the "(as of 2h ago)" suffix, the colour, and the "— run 'mac'" tail are all
+# read-time presentation. The shell appends those; this is the prefix.
+#
+# Note the separator and label style differ from $summary above: that string is
+# for notifications ("home: 2, brew-extra: 5"), this one for the prompt banner
+# ("home 2 · brew-extra 5"). Two renderings, one composition site.
+#
+# $err_parts is deliberately discarded here. The banner has always said a bare
+# "check-error", and keeping this byte-identical is what makes this change a
+# pure refactor. Naming the failing check is a follow-up, not part of this.
+banner=""
+[[ $HOME_DRIFT -gt 0 ]] && banner="${banner:+$banner · }home $HOME_DRIFT"
+[[ $BREW_MISSING -gt 0 ]] && banner="${banner:+$banner · }brew-missing $BREW_MISSING"
+[[ $BREW_EXTRA -gt 0 ]] && banner="${banner:+$banner · }brew-extra $BREW_EXTRA"
+[[ $DEFAULTS_DRIFT -gt 0 ]] && banner="${banner:+$banner · }defaults $DEFAULTS_DRIFT"
+[[ $SECURITY_DRIFT -gt 0 ]] && banner="${banner:+$banner · }security $SECURITY_DRIFT"
+[[ $BREWUP_FAILED -eq 1 ]] && banner="${banner:+$banner · }brewup-failed"
+[[ $HAD_ERROR -eq 1 ]] && banner="${banner:+$banner · }check-error"
+
+# The drift total, computed once by the module that owns the drift schema.
+# Every consumer (this script's exit code, the --brief fast path, chezmoi-fix's
+# cached/fresh comparison) reads it rather than re-summing the count fields, so
+# a sixth drift signal is added here and nowhere else. Computed before the
+# write so the file carries it. BREWUP_FAILED and HAD_ERROR are excluded by
+# design — they are conditions, not quantities of drift.
+drift_total=$((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + DEFAULTS_DRIFT + SECURITY_DRIFT))
+
 # Atomic state-file write: tmp+mv so a concurrent reader never sees a partial file.
 state_tmp="$STATE_FILE.tmp.$$"
 if {
@@ -292,6 +349,8 @@ if {
     printf 'HAD_ERROR=%s\n' "$HAD_ERROR"
     printf 'CHECKED_AT=%s\n' "$(date +%s)"
     printf 'summary=%q\n' "$summary"
+    printf 'banner=%q\n' "$banner"
+    printf 'drift_total=%s\n' "$drift_total"
 } >"$state_tmp"; then
     mv -f "$state_tmp" "$STATE_FILE" || rm -f "$state_tmp"
 else
@@ -300,9 +359,8 @@ fi
 
 emit "$summary"
 
-total=$((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + DEFAULTS_DRIFT + SECURITY_DRIFT))
 should_notify=0
-[[ $NOTIFY -eq 1 || $ALERT -eq 1 ]] && [[ $total -gt 0 || $HAD_ERROR -eq 1 ]] && should_notify=1
+[[ $NOTIFY -eq 1 || $ALERT -eq 1 ]] && [[ $drift_total -gt 0 || $HAD_ERROR -eq 1 ]] && should_notify=1
 
 if [[ $should_notify -eq 1 ]]; then
     # Escape backslashes and double-quotes for AppleScript string interpolation.
@@ -355,5 +413,5 @@ fi
 if [[ $HAD_ERROR -eq 1 ]]; then
     exit 2
 fi
-[[ $total -gt 0 ]] && exit 1
+[[ $drift_total -gt 0 ]] && exit 1
 exit 0

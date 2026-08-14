@@ -85,13 +85,13 @@ mac
 :   Alias for `chezmoi-fix`. The single drift-remediation entry point. Refreshes the drift check, summarises pending changes, walks through the right fix.
 
 chezmoi-drift-check
-:   Shell helper that compares `$HOME` to the source and writes a structured summary to `~/.cache/chezmoi-drift/state`.
+:   Shell helper that compares `$HOME` to the source and writes a structured summary to `~/.cache/chezmoi-drift/state`. Owns the drift schema: it also composes the shell banner's drift segments and the drift total, so no consumer re-derives them.
 
 chezmoi-brew-record
-:   Wrapper around `brew install`/`uninstall`/`upgrade` that appends an NDJSON event to `~/.cache/brewup.log`.
+:   Called by the `brew`/`mas` shell wrappers on `install`/`uninstall`/`reinstall`/`tap`/`untap`. Appends an NDJSON event to the brew inbox journal, `~/.cache/chezmoi-brew-inbox/journal.ndjson`.
 
 chezmoi-brew-sync
-:   Interactive tool that consumes `brewup.log`, dedupes/classifies/validates entries, and merges them into `Brewfile.tmpl`.
+:   Interactive tool that consumes the brew inbox journal, dedupes/classifies/validates entries, and merges them into `Brewfile.tmpl`.
 
 chezmoi-defaults-audit
 :   Walks `run_onchange_03-macos-defaults.sh` and compares declared values against the live machine. Reports drift.
@@ -105,10 +105,13 @@ chezmoi-security-audit
 :   chezmoi's config directory. Holds `chezmoi.toml` (init state) and `key.txt` (age private key).
 
 `~/.cache/chezmoi-drift/`
-:   Drift detection cache. Read by `mac` to surface what's pending.
+:   Drift detection cache. Holds `state`, sourced by the shell banner and by `mac` to surface what's pending. Field-by-field breakdown in [Recover from drift](runbooks/recover-from-drift.md).
+
+`~/.cache/chezmoi-brew-inbox/journal.ndjson`
+:   The brew inbox journal. Append-only NDJSON, one event per `brew`/`mas` operation, written by `chezmoi-brew-record` and consumed by `chezmoi-brew-sync`.
 
 `~/.cache/brewup.log`
-:   Append-only NDJSON event log for brew operations.
+:   Plain-text output of the daily `brewup` run (last ~2000 lines), tailed by `brewlog`. Unrelated to the brew inbox journal above — despite the similar name, no events are recorded here.
 
 `/Users/ed/.local/share/chezmoi`
 :   This repo. The chezmoi source tree.

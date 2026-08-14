@@ -192,17 +192,26 @@ alias brewlog='tail -F ~/.cache/brewup.log'
 # start: home files, brew missing/extra, macOS defaults, security baseline,
 # and pending brew-inbox events. e.g.
 #   chezmoi: home 2 · brew-extra 5 · inbox 3 — run 'mac' (as of 2h ago)
-# Cached state is read synchronously (cheap). A TTL-bounded refresh is kicked
-# off in the background — it only re-runs the full check when the cache is
-# older than $CHEZMOI_DRIFT_TTL (default 4h), otherwise it's a no-op.
+# The drift segments are composed by chezmoi-drift-check and read verbatim out
+# of $banner; only the live parts (inbox count, cache age, colour) are built
+# here. Cached state is read synchronously by sourcing the file — never by
+# invoking chezmoi-drift-check, which would put a fork on the startup path of
+# every shell and tmux pane. A TTL-bounded refresh is kicked off in the
+# background instead — it only re-runs the full check when the cache is older
+# than $CHEZMOI_DRIFT_TTL (default 4h), otherwise it's a no-op.
 # CHEZMOI_DRIFT_QUIET=1 silences the banner only; the cache still refreshes
 # and the daily launchd notification still fires.
 if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
-  _drift_state="$HOME/.cache/chezmoi-drift/state"
+  _drift_state="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-drift/state"
   _cache_age=-1
   _age_suffix=
   _parts=
   if [[ -f "$_drift_state" ]]; then
+    # Cleared before sourcing so a shell variable of the same name cannot be
+    # mistaken for a field the state file actually carries. $banner is legally
+    # empty (clean machine), so only a set-vs-unset test can tell "this cache
+    # predates the field" from "this cache says there is nothing to report".
+    unset banner drift_total
     # shellcheck disable=SC1090
     source "$_drift_state" 2>/dev/null
     # Cache age — used both to gate the background refresh below (avoid one
@@ -214,19 +223,32 @@ if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/
         _age_suffix=" (as of $(( _cache_age / 3600 ))h ago)"
       fi
     fi
-    (( ${HOME_DRIFT:-0} > 0 ))     && _parts+="${_parts:+ · }home ${HOME_DRIFT}"
-    (( ${BREW_MISSING:-0} > 0 ))   && _parts+="${_parts:+ · }brew-missing ${BREW_MISSING}"
-    (( ${BREW_EXTRA:-0} > 0 ))     && _parts+="${_parts:+ · }brew-extra ${BREW_EXTRA}"
-    (( ${DEFAULTS_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }defaults ${DEFAULTS_DRIFT}"
-    (( ${SECURITY_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }security ${SECURITY_DRIFT}"
-    # Daily brewup failed and has stayed failed. Its own segment rather than a
-    # count: this is a maintenance outage, not $HOME drift, and the fix is to
-    # read the log rather than to apply or re-add anything.
-    [[ "${BREWUP_FAILED:-0}" == "1" ]] && _parts+="${_parts:+ · }brewup-failed"
-    # A check error is surfaced as its own segment so it is never masked by
-    # (or mistaken for) real drift counts.
-    [[ "${HAD_ERROR:-0}" == "1" ]] && _parts+="${_parts:+ · }check-error"
-    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT BREWUP_FAILED HAD_ERROR CHECKED_AT summary
+    if [[ -n "${banner+x}" ]]; then
+      # chezmoi-drift-check composes the drift segments, so the banner and
+      # `mac` cannot disagree about what is pending. Everything below this
+      # point — inbox, age, colour, the run-'mac' tail — is read-time and
+      # stays here.
+      _parts="$banner"
+    else
+      # Fallback: a state file written before chezmoi-drift-check composed the
+      # banner. The cache TTL is 4h, so one exists in the wild after every
+      # upgrade; without this the first shells afterwards would show nothing.
+      # Removable once no such cache can survive — this must render identically
+      # to what the writer now produces.
+      (( ${HOME_DRIFT:-0} > 0 ))     && _parts+="${_parts:+ · }home ${HOME_DRIFT}"
+      (( ${BREW_MISSING:-0} > 0 ))   && _parts+="${_parts:+ · }brew-missing ${BREW_MISSING}"
+      (( ${BREW_EXTRA:-0} > 0 ))     && _parts+="${_parts:+ · }brew-extra ${BREW_EXTRA}"
+      (( ${DEFAULTS_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }defaults ${DEFAULTS_DRIFT}"
+      (( ${SECURITY_DRIFT:-0} > 0 )) && _parts+="${_parts:+ · }security ${SECURITY_DRIFT}"
+      # Daily brewup failed and has stayed failed. Its own segment rather than a
+      # count: this is a maintenance outage, not $HOME drift, and the fix is to
+      # read the log rather than to apply or re-add anything.
+      [[ "${BREWUP_FAILED:-0}" == "1" ]] && _parts+="${_parts:+ · }brewup-failed"
+      # A check error is surfaced as its own segment so it is never masked by
+      # (or mistaken for) real drift counts.
+      [[ "${HAD_ERROR:-0}" == "1" ]] && _parts+="${_parts:+ · }check-error"
+    fi
+    unset HOME_DRIFT BREW_MISSING BREW_EXTRA BREW_EXTRA_NAMES DEFAULTS_DRIFT SECURITY_DRIFT BREWUP_FAILED HAD_ERROR CHECKED_AT summary banner drift_total
   fi
   unset _drift_state
 

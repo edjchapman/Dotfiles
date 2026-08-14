@@ -100,6 +100,19 @@ The cache state file (`~/.cache/chezmoi-drift/state`) breaks down as:
 | `DEFAULTS_DRIFT` | N macOS settings diverge from `run_onchange_03-macos-defaults.sh`. | `chezmoi-defaults-audit --apply` re-asserts source values (useful after a macOS upgrade reset settings). |
 | `SECURITY_DRIFT` | N security baseline checks failed. | See "Security audit findings" above. |
 | `HAD_ERROR=1` | A check could not be run. Counts may be incomplete. | Re-run `chezmoi-drift-check --full` directly to see the underlying error; common causes are a broken `Brewfile.tmpl` or a missing age key. |
+| `BREWUP_FAILED=1` | The last daily `brewup` run failed and has stayed failed. Not drift — a maintenance outage. | `brewlog` to read the output; re-run `brewup` once fixed, which clears the marker. |
+| `BREW_EXTRA_NAMES` | Space-separated names behind `BREW_EXTRA`, so `mac` can offer per-package adopt/uninstall without re-running brew. | Not actionable on its own. |
+| `CHECKED_AT` | Unix timestamp of the write. Drives the 4h cache TTL and the banner's "(as of Nh ago)" suffix. | Not actionable on its own. |
+
+Three further fields are *derived* by `chezmoi-drift-check` from the ones above rather than counted from the machine. The naming carries the distinction: UPPERCASE fields are raw signals, lowercase fields are composed from them.
+
+| Field | Meaning |
+|---|---|
+| `summary` | The notification and CLI line — `drift: home: 2, brew-extra: 5`. |
+| `banner` | The drift segments of the shell banner — `home 2 · brew-extra 5`. Empty when there is nothing to report. Composed by the writer so the banner and `mac` cannot disagree about what is pending. The shell appends the live parts (inbox count, cache age, colour) and never re-derives these. |
+| `drift_total` | Sum of the five count fields. Every consumer reads this rather than re-summing, so a new drift signal is added in one place. `BREWUP_FAILED` and `HAD_ERROR` are excluded — they are conditions, not quantities. |
+
+`banner` and `drift_total` are optional to readers: a state file written before they existed can survive the 4h TTL, and every consumer falls back to composing from the raw fields when they are absent.
 
 ## Diagnose a specific file
 
