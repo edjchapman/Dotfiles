@@ -270,7 +270,8 @@ EOF
     # freshness test that answered "never fresh" would still pass the tests
     # above — which is exactly the state this script was in: `stat -f %m` runs
     # as GNU stat on a machine with coreutils ahead of /usr/bin on PATH, prints
-    # filesystem info to stdout, exits 1, and left mtime unparseable. The fast
+    # filesystem info to stdout, exits 1, and left mtime as a value no numeric
+    # guard would accept. The fast
     # path was unreachable and nothing said so.
     make_minimal_stubs
     write_state home=2
