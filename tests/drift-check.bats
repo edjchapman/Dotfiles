@@ -3,11 +3,95 @@
 # --parse-cleanup test hook (stdin → "<count>\t<space-joined names>"). No
 # chezmoi or brew required.
 
+load helpers
+
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     DRIFT_CHECK="$REPO_ROOT/dot_local/bin/executable_chezmoi-drift-check"
     ZSHRC="$REPO_ROOT/dot_zshrc"
     CHEZMOI_FIX="$REPO_ROOT/dot_local/bin/executable_chezmoi-fix"
+
+    TMPHOME="$(mktemp -d)"
+    export HOME="$TMPHOME/home"
+    export XDG_CACHE_HOME="$TMPHOME/cache"
+    mkdir -p "$HOME/.cache" "$XDG_CACHE_HOME/chezmoi-drift" "$TMPHOME/bin" "$TMPHOME/src"
+    STATE="$XDG_CACHE_HOME/chezmoi-drift/state"
+}
+
+teardown() {
+    rm -rf "$TMPHOME"
+}
+
+# Stub every binary a full run shells out to, and put them first on PATH.
+# chezmoi is not optional: the script exits early without it, so an unstubbed
+# run would exercise nothing and still pass. The brew stubs have to emit output
+# the *parsers* accept rather than just an exit code — the counts are what the
+# banner is composed from, so stubs that yield zeroes prove nothing.
+#
+# Nothing here touches the real machine: PATH is replaced, HOME and
+# XDG_CACHE_HOME are temporary, and no stub runs a privileged command.
+make_stubs() {
+    printf 'brew "restic"\n' >"$TMPHOME/src/Brewfile.tmpl"
+
+    cat >"$TMPHOME/bin/chezmoi" <<EOF
+#!/bin/sh
+# Records that it ran, so tests can assert the --brief fast path did not.
+echo "\$@" >>"$TMPHOME/chezmoi-invoked"
+case "\$1" in
+    status) printf 'MM .zshrc\nMM .gitconfig\n' ;;
+    source-path) printf '%s\n' "$TMPHOME/src" ;;
+    execute-template) cat ;;
+    *) exit 0 ;;
+esac
+EOF
+
+    # 1 missing formula; 3 extras across two block headers.
+    cat >"$TMPHOME/bin/brew" <<'EOF'
+#!/bin/sh
+case "$2" in
+    check)
+        printf 'Homebrew Bundle: foo needs to be installed\n'
+        exit 1
+        ;;
+    cleanup)
+        printf 'Would uninstall formulae:\nrestic\nWould uninstall casks:\nsteam\nobsidian\n'
+        exit 1
+        ;;
+esac
+exit 0
+EOF
+
+    # Audit protocol: "<ok>\t<bad>\t<skip>" — drift is always column 2.
+    printf '#!/bin/sh\nprintf "10\\t2\\t0\\n"\n' >"$TMPHOME/bin/chezmoi-defaults-audit"
+    printf '#!/bin/sh\nprintf "8\\t1\\t0\\n"\n' >"$TMPHOME/bin/chezmoi-security-audit"
+
+    chmod +x "$TMPHOME/bin"/*
+    export PATH="$TMPHOME/bin:/usr/bin:/bin"
+}
+
+# Stub only what --brief needs to get past its preconditions, so a test can
+# prove the fast path never reached the expensive checks.
+make_minimal_stubs() {
+    cat >"$TMPHOME/bin/chezmoi" <<EOF
+#!/bin/sh
+echo "\$@" >>"$TMPHOME/chezmoi-invoked"
+exit 0
+EOF
+    chmod +x "$TMPHOME/bin/chezmoi"
+    export PATH="$TMPHOME/bin:/usr/bin:/bin"
+}
+
+# Extract the dot_zshrc banner block so it can be run in isolation. The anchor
+# is a comment, so guard against it silently matching nothing — a zero-byte
+# extraction would make every assertion below vacuously pass.
+extract_banner_block() {
+    sed -n '/^# chezmoi drift banner/,/^fi$/p' "$ZSHRC" >"$TMPHOME/banner.zsh"
+    [ -s "$TMPHOME/banner.zsh" ]
+    grep -q 'chezmoi:' "$TMPHOME/banner.zsh"
+    # The block only runs if it can find the drift checker on PATH.
+    printf '#!/bin/sh\nexit 0\n' >"$TMPHOME/bin/chezmoi-drift-check"
+    chmod +x "$TMPHOME/bin/chezmoi-drift-check"
+    export PATH="$TMPHOME/bin:/usr/bin:/bin"
 }
 
 @test "modern block output: counts package names, not header lines" {
@@ -89,17 +173,200 @@ EOF
     [ "$output" = "$(printf '0\t')" ]
 }
 
-@test "state file writer includes BREW_EXTRA_NAMES" {
-    # The atomic state write must persist the names so chezmoi-fix can offer
-    # per-package adopt/uninstall. Grep the source (behavioural test would need
-    # chezmoi + brew).
-    run grep -n "BREW_EXTRA_NAMES=%q" "$DRIFT_CHECK"
+@test "full run writes the counts, the extra names, and the brewup signal" {
+    # Behavioural replacement for the greps that used to pin `BREW_EXTRA_NAMES=%q`
+    # and `BREWUP_FAILED=%s` in the source. Those passed while behaviour was
+    # broken and failed on any harmless rename; this drives the real script and
+    # reads the file it actually wrote.
+    make_stubs
+    run "$DRIFT_CHECK" --full --quiet
+    [ "$status" -eq 1 ] # drift present
+
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HOME_DRIFT" -eq 2 ]
+    [ "$BREW_MISSING" -eq 1 ]
+    [ "$BREW_EXTRA" -eq 3 ]
+    [ "$BREW_EXTRA_NAMES" = "restic steam obsidian" ]
+    [ "$DEFAULTS_DRIFT" -eq 2 ]
+    [ "$SECURITY_DRIFT" -eq 1 ]
+    [ "$BREWUP_FAILED" -eq 0 ]
+    [ "$HAD_ERROR" -eq 0 ]
+}
+
+@test "full run writes a drift_total consistent with the counts it wrote" {
+    # The invariant that lets every consumer read drift_total instead of
+    # re-summing. Asserted here rather than re-derived at runtime, which is
+    # what would have kept the hand-written sums alive.
+    make_stubs
+    run "$DRIFT_CHECK" --full --quiet
+
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$drift_total" -eq $((HOME_DRIFT + BREW_MISSING + BREW_EXTRA + DEFAULTS_DRIFT + SECURITY_DRIFT)) ]
+    [ "$drift_total" -eq 9 ]
+}
+
+@test "full run composes the banner the shell used to build by hand" {
+    # The banner must render byte-identically to dot_zshrc's old composition:
+    # ' · ' separators, space-separated labels (not the 'home: 2' form used by
+    # $summary), and 'brewup-failed' as a bare segment rather than a count.
+    make_stubs
+    printf '2026-08-14 09:00:00\n' >"$HOME/.cache/brewup.failed"
+    run "$DRIFT_CHECK" --full --quiet
+
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$banner" = "home 2 · brew-missing 1 · brew-extra 3 · defaults 2 · security 1 · brewup-failed" ]
+    # brewup is a condition, not a quantity — it must not inflate the total.
+    [ "$drift_total" -eq 9 ]
+}
+
+@test "a clean full run writes an empty banner, not a missing one" {
+    # The distinction the shell's fallback turns on: present-and-empty means
+    # 'nothing to report', absent means 'this cache predates the field'.
+    printf 'brew "restic"\n' >"$TMPHOME/src/Brewfile.tmpl"
+    cat >"$TMPHOME/bin/chezmoi" <<EOF
+#!/bin/sh
+case "\$1" in
+    status) exit 0 ;;
+    source-path) printf '%s\n' "$TMPHOME/src" ;;
+    execute-template) cat ;;
+    *) exit 0 ;;
+esac
+EOF
+    chmod +x "$TMPHOME/bin/chezmoi"
+    export PATH="$TMPHOME/bin:/usr/bin:/bin"
+
+    run "$DRIFT_CHECK" --full --quiet
+    [ "$status" -eq 0 ]
+    grep -q "^banner=''$" "$STATE"
+    grep -q "^drift_total=0$" "$STATE"
+}
+
+@test "--brief reports the cached total without re-running any check" {
+    make_minimal_stubs
+    write_state home=2 brew_extra=5 summary='drift: home: 2, brew-extra: 5'
+
+    run "$DRIFT_CHECK" --brief --quiet
+    [ "$status" -eq 1 ] # drift_total is 7
+    [ ! -f "$TMPHOME/chezmoi-invoked" ]
+}
+
+@test "--brief falls back to summing counts when drift_total is absent" {
+    # A state file written before this field existed survives the 4h TTL, so
+    # the fast path has to keep working against it.
+    make_minimal_stubs
+    write_state home=3 legacy=1 summary='drift: home: 3'
+    ! grep -q '^drift_total=' "$STATE"
+
+    run "$DRIFT_CHECK" --brief --quiet
+    [ "$status" -eq 1 ]
+    [ ! -f "$TMPHOME/chezmoi-invoked" ]
+}
+
+@test "--brief falls through to a full check once the cache goes stale" {
+    # The other half of the cache-freshness contract. Without this, a broken
+    # freshness test that answered "never fresh" would still pass the tests
+    # above — which is exactly the state this script was in: `stat -f %m` runs
+    # as GNU stat on a machine with coreutils ahead of /usr/bin on PATH, prints
+    # filesystem info to stdout, exits 1, and left mtime as a value no numeric
+    # guard would accept. The fast
+    # path was unreachable and nothing said so.
+    make_minimal_stubs
+    write_state home=2
+    touch -t 202001010000 "$STATE"
+
+    run "$DRIFT_CHECK" --brief --quiet
+    [ -f "$TMPHOME/chezmoi-invoked" ]
+}
+
+@test "--brief exits clean on a cached zero total" {
+    make_minimal_stubs
+    write_state summary='drift: clean'
+
+    run "$DRIFT_CHECK" --brief --quiet
     [ "$status" -eq 0 ]
 }
 
-@test "state file writer includes BREWUP_FAILED" {
-    run grep -n "BREWUP_FAILED=%s" "$DRIFT_CHECK"
+@test "banner block prints the composed banner verbatim" {
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state home=2 brew_extra=5 banner='home 2 · brew-extra 5'
+
+    run zsh -c "source '$TMPHOME/banner.zsh'"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"chezmoi: home 2 · brew-extra 5 — run 'mac'"* ]]
+}
+
+@test "banner block recomposes from counts when the banner field is absent" {
+    # The upgrade path: this is what every shell sees until the 4h TTL expires
+    # and the first full run rewrites the cache. A blank banner here is a bug,
+    # not a cosmetic issue.
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state home=2 brew_extra=5 legacy=1
+
+    run zsh -c "source '$TMPHOME/banner.zsh'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"chezmoi: home 2 · brew-extra 5 — run 'mac'"* ]]
+}
+
+@test "a clean state prints the tip rather than a banner" {
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state banner=''
+
+    run zsh -c "source '$TMPHOME/banner.zsh'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"tip:"* ]]
+    [[ "$output" != *"chezmoi:"* ]]
+}
+
+@test "a present-but-empty banner wins over the raw counts" {
+    # This is what makes the composed value authoritative, and the only case
+    # where the set-test guard differs observably from `[[ -n $banner ]]`.
+    # Under an emptiness test this fixture falls through to the legacy path and
+    # prints "home 2" — the banner and the writer disagreeing in the same
+    # shell, which is the failure this whole change exists to make impossible.
+    #
+    # The fixture is deliberately self-inconsistent: no real run produces it.
+    # It is the discriminating input, and without it the guard is untested.
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state home=2 banner=''
+
+    run zsh -c "source '$TMPHOME/banner.zsh'"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"home 2"* ]]
+    [[ "$output" == *"tip:"* ]]
+}
+
+@test "banner block leaks no state-file variables into the shell" {
+    # The file is sourced straight into the interactive shell, so every field
+    # it defines has to be cleaned up — including the two new ones.
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state home=1 banner='home 1'
+
+    # \${+parameters[x]} is the reliable set-test here: \${(P)+v} reports "set"
+    # for an unset name, which would make this assertion vacuous.
+    run zsh -c "source '$TMPHOME/banner.zsh'; for v in banner drift_total summary HOME_DRIFT CHECKED_AT; do
+        (( \${+parameters[\$v]} )) && print \"LEAKED: \$v\"
+    done; print DONE"
+    [[ "$output" == *"DONE"* ]]
+    [[ "$output" != *"LEAKED"* ]]
+}
+
+@test "banner reads the same state path the scripts write" {
+    # dot_zshrc used to hardcode \$HOME/.cache while both scripts honoured
+    # XDG_CACHE_HOME, so setting it made the banner read a file nothing wrote.
+    command -v zsh >/dev/null || skip "zsh not available"
+    extract_banner_block
+    write_state home=4 banner='home 4'
+
+    run zsh -c "source '$TMPHOME/banner.zsh'"
+    [[ "$output" == *"home 4"* ]]
 }
 
 @test "brewup marker path agrees across writer and both readers" {

@@ -74,9 +74,17 @@ if [[ -f $DRIFT_STATE ]]; then
     BREW_EXTRA=0
     DEFAULTS_DRIFT=0
     SECURITY_DRIFT=0
+    drift_total=
     # shellcheck disable=SC1090
     source "$DRIFT_STATE" 2>/dev/null || true
-    cached_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
+    # chezmoi-drift-check owns the drift schema and composes the total, so read
+    # it rather than re-summing the counts here. A cache written before that
+    # field existed (TTL is 4h) has none, so fall back to the sum.
+    if [[ $drift_total =~ ^[0-9]+$ ]]; then
+        cached_drift_total=$drift_total
+    else
+        cached_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
+    fi
 fi
 
 # Refresh drift counts up-front (quiet — we render our own summary). If the
@@ -98,16 +106,24 @@ SECURITY_DRIFT=0
 BREWUP_FAILED=0
 HAD_ERROR=0
 summary=
+drift_total=
 if [[ -f $DRIFT_STATE ]]; then
     # shellcheck disable=SC1090
     source "$DRIFT_STATE" 2>/dev/null || true
 fi
-fresh_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
+if [[ $drift_total =~ ^[0-9]+$ ]]; then
+    fresh_drift_total=$drift_total
+else
+    fresh_drift_total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0}))
+fi
 
 inbox_count=0
 [[ -s $INBOX_JOURNAL ]] && inbox_count=$(wc -l <"$INBOX_JOURNAL" | tr -d ' ')
 
-total=$((${HOME_DRIFT:-0} + ${BREW_MISSING:-0} + ${BREW_EXTRA:-0} + ${DEFAULTS_DRIFT:-0} + ${SECURITY_DRIFT:-0} + inbox_count))
+# Inbox is not drift — it has its own banner segment and its own menu entry —
+# but it is actionable, so it joins the total that decides whether there is
+# anything to show at all.
+total=$((fresh_drift_total + inbox_count))
 
 echo
 echo "==> chezmoi-fix"

@@ -4,6 +4,8 @@
 # with the script in CHEZMOI_FIX_TEST_MODE=1 so it skips the chezmoi/TTY/refresh
 # preconditions and exits after menu rendering.
 
+load helpers
+
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     FIX="$REPO_ROOT/dot_local/bin/executable_chezmoi-fix"
@@ -30,38 +32,8 @@ teardown() {
     rm -rf "$TMPHOME"
 }
 
-# Helper: write a state file with named overrides; missing fields default to 0.
-write_state() {
-    local home_drift=0 brew_missing=0 brew_extra=0 brew_extra_names="" defaults_drift=0
-    local security_drift=0 brewup_failed=0 had_error=0 checked_at summary="drift: clean"
-    checked_at=$(date +%s)
-    while (($# > 0)); do
-        case "$1" in
-            home=*) home_drift=${1#home=} ;;
-            brew_missing=*) brew_missing=${1#brew_missing=} ;;
-            brew_extra=*) brew_extra=${1#brew_extra=} ;;
-            extra_names=*) brew_extra_names=${1#extra_names=} ;;
-            defaults=*) defaults_drift=${1#defaults=} ;;
-            security=*) security_drift=${1#security=} ;;
-            brewup=*) brewup_failed=${1#brewup=} ;;
-            error=*) had_error=${1#error=} ;;
-            summary=*) summary=${1#summary=} ;;
-        esac
-        shift
-    done
-    cat >"$XDG_CACHE_HOME/chezmoi-drift/state" <<EOF
-HOME_DRIFT=$home_drift
-BREW_MISSING=$brew_missing
-BREW_EXTRA=$brew_extra
-BREW_EXTRA_NAMES='$brew_extra_names'
-DEFAULTS_DRIFT=$defaults_drift
-SECURITY_DRIFT=$security_drift
-BREWUP_FAILED=$brewup_failed
-HAD_ERROR=$had_error
-CHECKED_AT=$checked_at
-summary='$summary'
-EOF
-}
+# write_state comes from tests/helpers.bash (loaded above) — shared with
+# drift-check.bats so both suites synthesize state files the same way.
 
 @test "clean state prints 'No drift detected' and exits" {
     write_state summary='drift: clean'
