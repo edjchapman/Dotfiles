@@ -149,3 +149,16 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"no net changes"* ]]
 }
+
+@test "gate refuses an untracked Brewfile.tmpl" {
+    # git status --porcelain (unlike the old git diff --quiet) also flags
+    # untracked paths. Believed unreachable in normal use — Brewfile.tmpl is
+    # committed at repo init — but the gate should still refuse rather than
+    # merge into an unreviewed file if it ever happens.
+    gate_setup
+    git -C "$SRCDIR" rm --cached -q Brewfile.tmpl
+    run "$SYNC"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"uncommitted changes"* ]]
+    [ -s "$JOURNAL" ] # journal preserved
+}

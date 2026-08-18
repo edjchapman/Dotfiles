@@ -82,6 +82,15 @@ trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
 # the gate and got merged over without ever being reviewed as "dirty".
 # The command-substitution-inside-the-condition shape keeps git failure (not a
 # repo, corrupt index) on the dirty/refuse path, as the old gate had it.
+#
+# NOTE: --porcelain also flags an *untracked* Brewfile.tmpl as dirty, which
+# `git diff --quiet` never did. That's believed unreachable — Brewfile.tmpl is
+# committed at repo init and every edit path here writes back to a tracked
+# file — but if it ever fires, --force below cannot honour its "stash it
+# first" promise: `stash push` needs `-u` to pick up an untracked path, and
+# `-u` has no committed baseline to restore, so it deletes the file outright
+# instead of merging into it. Don't add `-u` as a quick fix; if this path
+# becomes reachable, it needs its own recovery story, not a stash flag.
 if dirty=$(git -C "$SRC" status --porcelain -- Brewfile.tmpl 2>/dev/null) && [[ -z $dirty ]]; then
     :
 else
