@@ -77,7 +77,21 @@ trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
 # Git cleanliness gate. We never silently merge into a dirty Brewfile.tmpl —
 # that is the single biggest "lose user work" failure mode for this design.
 # ------------------------------------------------------------------------------
-if git -C "$SRC" diff --quiet -- Brewfile.tmpl 2>/dev/null; then
+# `git status --porcelain` rather than `git diff --quiet`: the latter compares
+# working tree to index only, so a *staged* Brewfile.tmpl edit slipped through
+# the gate and got merged over without ever being reviewed as "dirty".
+# The command-substitution-inside-the-condition shape keeps git failure (not a
+# repo, corrupt index) on the dirty/refuse path, as the old gate had it.
+#
+# NOTE: --porcelain also flags an *untracked* Brewfile.tmpl as dirty, which
+# `git diff --quiet` never did. That's believed unreachable — Brewfile.tmpl is
+# committed at repo init and every edit path here writes back to a tracked
+# file — but if it ever fires, --force below cannot honour its "stash it
+# first" promise: `stash push` needs `-u` to pick up an untracked path, and
+# `-u` has no committed baseline to restore, so it deletes the file outright
+# instead of merging into it. Don't add `-u` as a quick fix; if this path
+# becomes reachable, it needs its own recovery story, not a stash flag.
+if dirty=$(git -C "$SRC" status --porcelain -- Brewfile.tmpl 2>/dev/null) && [[ -z $dirty ]]; then
     :
 else
     if ((FORCE)); then
@@ -465,18 +479,29 @@ apply_add() {
         }
     ' "$WORK")
 
+    # insert_at can be one past the last line of the file: appending after a
+    # same-kind entry that IS the last line (e.g. the trailing mas section)
+    # yields target = NR+1, where `NR == at` never fires and the entry would
+    # silently vanish — while the journal still gets truncated. The END block
+    # appends what the main loop could not.
     if ((wrap)); then
         # Insert the line wrapped in its own conditional block right before insert_at.
         awk -v at="$insert_at" -v line="$line" '
-            NR == at {
+            function emit() {
                 print "{{ if eq .machine_type \"personal\" -}}"
                 print line
                 print "{{ end -}}"
             }
+            NR == at { emit() }
             { print }
+            END { if (at > NR) emit() }
         ' "$WORK" >"$tmp"
     else
-        awk -v at="$insert_at" -v line="$line" 'NR == at { print line } { print }' "$WORK" >"$tmp"
+        awk -v at="$insert_at" -v line="$line" '
+            NR == at { print line }
+            { print }
+            END { if (at > NR) print line }
+        ' "$WORK" >"$tmp"
     fi
 
     mv "$tmp" "$WORK"
