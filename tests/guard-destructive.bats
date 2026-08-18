@@ -261,6 +261,24 @@ guard_raw() {
     [ "$status" -eq 2 ]
 }
 
+@test "allows a feature push chained with a PR whose base is main" {
+    # `--base main` belongs to gh, not to git push. Scanning the whole command
+    # line refused this, which made it impossible to push-and-open-a-PR in one
+    # call — including for this very change.
+    run guard 'git push -u origin feature-x && gh pr create --base main --head feature-x'
+    [ "$status" -eq 0 ]
+}
+
+@test "still blocks a real push to main chained after something else" {
+    run guard 'echo done && git push origin main'
+    [ "$status" -eq 2 ]
+}
+
+@test "still blocks a force-push chained after something else" {
+    run guard 'echo done && git push --force origin feature-x'
+    [ "$status" -eq 2 ]
+}
+
 @test "blocks pushing to main" {
     run guard "git push origin main"
     [ "$status" -eq 2 ]

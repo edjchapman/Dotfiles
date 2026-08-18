@@ -157,10 +157,25 @@ case "$scan" in
         # allowed — the same fail-open class as the truncating extractor above.
         # Keeping - and _ out of the boundary leaves fix/main-menu and my-main
         # allowed, since those are genuinely different branches.
-        if printf '%s' "$scan" | grep -qE -- '--force|(^|[^A-Za-z0-9_-])-[a-zA-Z]*f[a-zA-Z]*([^A-Za-z0-9_-]|$)'; then
+        #
+        # Both checks look at the `git push` invocation alone, not the whole
+        # command line. Scanning everything meant that
+        #     git push -u origin feat && gh pr create --base main
+        # was refused as a push to main, which it plainly is not. Segments are
+        # split on the shell separators that end a command; if the split finds
+        # nothing (it should not, the case arm already matched) fall back to
+        # the full text rather than skipping the checks.
+        # tr pads set2 with its last character, so all three separators become
+        # newlines from the single '\n'.
+        push_seg=$(printf '%s' "$scan" | tr ';&|' '\n' \
+            | grep -E '(^|[[:space:]])git[[:space:]]+push([[:space:]]|$)' || true)
+        if [ -z "$push_seg" ]; then
+            push_seg=$scan
+        fi
+        if printf '%s' "$push_seg" | grep -qE -- '--force|(^|[^A-Za-z0-9_-])-[a-zA-Z]*f[a-zA-Z]*([^A-Za-z0-9_-]|$)'; then
             block "Refusing force-push. It can rewrite remote history; run it yourself if you truly need to."
         fi
-        if printf '%s' "$scan" | grep -qE -- '(^|[^A-Za-z0-9_-])(main|master)([^A-Za-z0-9_-]|$)'; then
+        if printf '%s' "$push_seg" | grep -qE -- '(^|[^A-Za-z0-9_-])(main|master)([^A-Za-z0-9_-]|$)'; then
             block "Refusing to push to main/master. Push a feature branch and open a PR instead."
         fi
         _branch=$(git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
