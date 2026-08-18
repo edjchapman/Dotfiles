@@ -26,6 +26,28 @@ plural() {
 # `uninstall` (which would look for a formula named after the tap and fail).
 is_brew_tap() { [[ $1 == */* && $1 != */*/* ]]; }
 
+# Kick off a background refresh of the drift cache. Every mutating menu path
+# must end in one of these: the cache was refreshed *before* remediation, so
+# without it the banner keeps reporting the drift the user just fixed for up
+# to $CHEZMOI_DRIFT_TTL (4h). The dot_zshrc chezmoi() wrapper can't cover
+# this — it only fires when `chezmoi` is typed interactively, not when this
+# script invokes the real binary.
+refresh_drift() {
+    command -v chezmoi-drift-check >/dev/null 2>&1 \
+        && (chezmoi-drift-check --full --quiet >/dev/null 2>&1 &)
+    return 0
+}
+
+# Run a remediation command, refresh the cache, exit with the command's rc.
+# Replaces the bare `exec` for mutating dispatch targets; read-only targets
+# (doctor, --drift inspections) keep exec — nothing to refresh.
+run_then_refresh() {
+    "$@"
+    local rc=$?
+    refresh_drift
+    exit "$rc"
+}
+
 # Reported rather than offered as a menu action: the failure modes (a wedged
 # cask staging dir, a tap fetch error, a full disk) have no safe generic
 # remedy, so the useful move is to show the tail and let the user decide.
@@ -233,7 +255,7 @@ fi
 id=${OPTS[$((reply - 1))]%%|*}
 
 case "$id" in
-    brew-sync) exec chezmoi-brew-sync ;;
+    brew-sync) run_then_refresh chezmoi-brew-sync ;;
     apply)
         echo
         echo "==> chezmoi diff (review carefully before applying):"
@@ -241,7 +263,7 @@ case "$id" in
         echo
         read -r -p "Run chezmoi apply now? [y/N] " confirm <"$TTY"
         if [[ $confirm =~ ^[Yy]$ ]]; then
-            exec chezmoi apply
+            run_then_refresh chezmoi apply
         fi
         echo "apply skipped — re-run chezmoi-fix when ready"
         ;;
@@ -262,6 +284,7 @@ case "$id" in
             exit 0
         fi
         adopted=0
+        removed=0
         for pkg in "${extras[@]}"; do
             echo
             read -r -p "${pkg} — [a]dopt into Brewfile / [u]ninstall / [s]kip? [s] " action <"$TTY"
@@ -283,9 +306,15 @@ case "$id" in
                         # Not in Brewfile.tmpl, so there's no journal event to record.
                         # A bare "org/tap" is a tap → untap; anything else → uninstall.
                         if is_brew_tap "$pkg"; then
-                            brew untap "$pkg" || echo "   untap failed: $pkg" >&2
+                            if brew untap "$pkg"; then
+                                removed=$((removed + 1))
+                            else
+                                echo "   untap failed: $pkg" >&2
+                            fi
+                        elif brew uninstall "$pkg"; then
+                            removed=$((removed + 1))
                         else
-                            brew uninstall "$pkg" || echo "   uninstall failed: $pkg" >&2
+                            echo "   uninstall failed: $pkg" >&2
                         fi
                     else
                         echo "   kept $pkg (still unmanaged)"
@@ -297,8 +326,11 @@ case "$id" in
         if ((adopted > 0)); then
             echo
             read -r -p "Merge ${adopted} adopted $(plural "$adopted" package) into Brewfile.tmpl now? [Y/n] " go <"$TTY"
-            [[ $go =~ ^[Nn]$ ]] || exec chezmoi-brew-sync
+            [[ $go =~ ^[Nn]$ ]] || run_then_refresh chezmoi-brew-sync
         fi
+        # Uninstalls (and adopts whose merge was declined) changed what the
+        # BREW_EXTRA count would find; skipping everything changed nothing.
+        ((removed > 0 || adopted > 0)) && refresh_drift
         ;;
     backup)
         # Walk each drifted file: show its diff, then choose a direction —
@@ -309,6 +341,7 @@ case "$id" in
         src_dir=$(chezmoi source-path)
         status_re='^[ ADMR][ ADMR] '
         backed_up=()
+        mutated=0
         while IFS= read -r line; do
             [[ $line =~ $status_re ]] || continue
             rel=${line:3}
@@ -325,7 +358,10 @@ case "$id" in
             read -r -p "   [a]pply repo version / [b]ack up my version / [s]kip? [s] " action <"$TTY"
             case "$action" in
                 a | A)
-                    chezmoi apply -- "$target" && echo "   applied repo version"
+                    if chezmoi apply -- "$target"; then
+                        echo "   applied repo version"
+                        mutated=1
+                    fi
                     ;;
                 b | B)
                     if [[ $(basename "${src:-unknown}") == encrypted_* ]]; then
@@ -337,6 +373,8 @@ case "$id" in
                 *) echo "   skipped" ;;
             esac
         done < <(chezmoi status --exclude=externals 2>/dev/null)
+        ((${#backed_up[@]} > 0)) && mutated=1
+        ((mutated)) && refresh_drift
         if ((${#backed_up[@]} > 0)); then
             echo
             echo "Backed up ${#backed_up[@]} $(plural "${#backed_up[@]}" file) into the source repo."
@@ -348,7 +386,7 @@ case "$id" in
         fi
         ;;
     defaults) exec chezmoi-defaults-audit --drift ;;
-    defaults-apply) exec chezmoi-defaults-audit --apply ;;
+    defaults-apply) run_then_refresh chezmoi-defaults-audit --apply ;;
     security) exec chezmoi-security-audit --drift ;;
     doctor) exec chezmoi doctor ;;
     dismiss)

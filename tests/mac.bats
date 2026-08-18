@@ -248,6 +248,38 @@ STUB
     [ "$status" -eq 0 ]
 }
 
+@test "mutating dispatch targets end in a drift refresh, not a bare exec" {
+    # The cache is refreshed *before* remediation, so a mutating path that
+    # exits without refreshing leaves the banner reporting the drift the user
+    # just fixed for up to 4h. The dot_zshrc chezmoi() wrapper can't cover
+    # these — it only fires on an interactive `chezmoi`, not on this script's
+    # invocations. Grep guards, same style as the brewup ownership tests.
+    run grep -c 'run_then_refresh chezmoi apply$' "$FIX"
+    [ "$output" = "1" ]
+    run grep -c 'run_then_refresh chezmoi-brew-sync' "$FIX"
+    [ "$output" = "2" ] # menu dispatch + post-adopt handoff
+    run grep -c 'run_then_refresh chezmoi-defaults-audit --apply' "$FIX"
+    [ "$output" = "1" ]
+    run grep -E 'exec (chezmoi apply|chezmoi-brew-sync|chezmoi-defaults-audit --apply)' "$FIX"
+    [ "$status" -ne 0 ]
+}
+
+@test "read-only dispatch targets still exec (nothing to refresh)" {
+    run grep -c 'exec chezmoi doctor' "$FIX"
+    [ "$output" = "1" ]
+    run grep -c 'exec chezmoi-defaults-audit --drift' "$FIX"
+    [ "$output" = "1" ]
+    run grep -c 'exec chezmoi-security-audit --drift' "$FIX"
+    [ "$output" = "1" ]
+}
+
+@test "per-package and per-file branches refresh only after a real mutation" {
+    # brew-extra refreshes after uninstalls/adopts; backup after apply/re-add.
+    # A user who skips every prompt must not pay for a full drift check.
+    run grep -c '&& refresh_drift$' "$FIX"
+    [ "$output" = "2" ]
+}
+
 @test "is-tap: a bare org/tap is a tap (untap, not uninstall)" {
     run "$FIX" --is-tap "hashicorp/tap"
     [ "$status" -eq 0 ]
