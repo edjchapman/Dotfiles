@@ -1,40 +1,48 @@
 #!/usr/bin/env bats
 # Tests for the audit helpers (chezmoi-defaults-audit, chezmoi-security-audit):
-# bash-3.2 portability of the pieces that run on a fresh machine, plus the
-# grep -c counting shape. Functions are extracted with sed and driven directly,
-# same pattern as brew-sync.bats and the brewup() tests.
+# bash-3.2 portability of normalize_bool, plus the grep -c counting shape.
+# The function is extracted with sed and driven directly, same pattern as
+# brew-sync.bats and the brewup() tests.
+#
+# The broader bash-4-ism class (${var,,}/^^, readarray/mapfile, declare -A)
+# is guarded by scripts/check-bash4-isms.sh, a pre-commit hook, not a bats
+# test here: `bats unit tests` isn't among the 12 required checks on `main`
+# (docs/gotchas.md), so a source-text assertion in this file is advisory only
+# and can't actually block a regression from landing. The pre-commit hook can.
 
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     DEFAULTS_AUDIT="$REPO_ROOT/dot_local/bin/executable_chezmoi-defaults-audit"
     SECURITY_AUDIT="$REPO_ROOT/dot_local/bin/executable_chezmoi-security-audit"
 
-    TMPHOME="$(mktemp -d)"
-    sed -n '/^normalize_bool()/,/^}/p' "$DEFAULTS_AUDIT" >"$TMPHOME/normalize_bool.bash"
-    grep -q 'normalize_bool()' "$TMPHOME/normalize_bool.bash"
+    WORKDIR="$(mktemp -d)"
+    sed -n '/^normalize_bool()/,/^}/p' "$DEFAULTS_AUDIT" >"$WORKDIR/normalize_bool.bash"
+    grep -q 'normalize_bool()' "$WORKDIR/normalize_bool.bash"
 }
 
 teardown() {
-    rm -rf "$TMPHOME"
+    rm -rf "$WORKDIR"
 }
 
-# Run normalize_bool under a specific bash binary.
-nb() { # <bash-binary> <value>
-    run "$1" -c "source '$TMPHOME/normalize_bool.bash'; normalize_bool '$2'"
+# Run normalize_bool under a specific bash binary. The value under test is
+# passed as a real argument (bash -c's $0/$1), never interpolated into the
+# command string — safe for any value, including one containing a quote.
+run_normalize_bool() { # <bash-binary> <value>
+    run "$1" -c 'source "$0"; normalize_bool "$1"' "$WORKDIR/normalize_bool.bash" "$2"
 }
 
 @test "normalize_bool maps every -bool spelling to 1/0" {
     for v in true TRUE yes 1; do
-        nb bash "$v"
+        run_normalize_bool bash "$v"
         [ "$status" -eq 0 ]
         [ "$output" = "1" ]
     done
     for v in false NO no 0; do
-        nb bash "$v"
+        run_normalize_bool bash "$v"
         [ "$status" -eq 0 ]
         [ "$output" = "0" ]
     done
-    nb bash "weird"
+    run_normalize_bool bash "weird"
     [ "$output" = "weird" ]
 }
 
@@ -42,25 +50,22 @@ nb() { # <bash-binary> <value>
     # The fresh-machine path: `env bash` resolves to /bin/bash until brew
     # bundle installs Homebrew bash, and bash 3.2 has no ${var,,} expansion —
     # which threw "bad substitution" and turned every boolean into a false
-    # mismatch. Meaningful on macOS (/bin/bash is 3.2); elsewhere it still
-    # pins the function to whatever /bin/bash is.
+    # mismatch. Gated on the actual version, not just presence: /bin/bash is
+    # bash 5 on Linux runners, which would make this pass without exercising
+    # the 3.2 path it exists to pin.
     [ -x /bin/bash ] || skip "/bin/bash not present"
-    nb /bin/bash TRUE
+    /bin/bash --version | head -1 | grep -q 'version 3' \
+        || skip "/bin/bash is not bash 3.x ($(/bin/bash --version | head -1))"
+    run_normalize_bool /bin/bash TRUE
     [ "$status" -eq 0 ]
     [ "$output" = "1" ]
-}
-
-@test "no bash-4-only expansions in the audit helpers" {
-    # Both scripts must stay runnable by /bin/bash 3.2 (fresh machine, before
-    # brew bundle). Guards the class, not just the one fixed instance.
-    run grep -nE '\$\{[A-Za-z_0-9]+(\[[^]]*\])?(,,|\^\^)|readarray|mapfile|declare -A' \
-        "$DEFAULTS_AUDIT" "$SECURITY_AUDIT"
-    [ "$status" -ne 0 ]
 }
 
 @test "pending-updates count never carries a second line" {
     # grep -c prints its count (including 0) before a non-zero no-match exit,
     # so an `|| echo 0` fallback appended a second line: pending="0\n0".
+    # Advisory only (see file header) — this asserts on source text, not
+    # behaviour, and bats isn't a required check.
     run grep -n 'grep -c.*|| echo' "$SECURITY_AUDIT"
     [ "$status" -ne 0 ]
 }

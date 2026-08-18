@@ -350,7 +350,16 @@ if [[ -f $SU_CACHE ]]; then
         # before its non-zero no-match exit, so the fallback *appended* a second
         # line and produced the literal "0\n0" as the pending count.
         pending=$(grep -cE '^\* Label:|^   Title:' "$SU_CACHE" 2>/dev/null) || true
-        check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
+        # The outer gate (bare 'Label'/'Title' anywhere) is looser than the
+        # anchored count patterns above, so it can match while the count comes
+        # back 0 — e.g. the word appears in a preamble line that isn't a
+        # `* Label:`/`   Title:` entry. A "0 update(s) pending" fail was
+        # nonsensical; treat a zero count as ok rather than failing on it.
+        if ((pending > 0)); then
+            check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
+        else
+            check "macOS software updates" ok
+        fi
     else
         check "macOS software updates" skip
     fi
