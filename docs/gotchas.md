@@ -83,6 +83,15 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! info "App Store apps need `mas` to install via Brewfile"
     `mas` is in the Brewfile and lets `mas` lines work. But you must be signed in to the App Store first. The new-machine runbook covers this.
 
+!!! danger "`env bash` is bash 3.2 during the bootstrap window"
+    Every chezmoi-deployed script uses `#!/usr/bin/env bash`, which resolves against the ambient `PATH` — on a fresh Mac that's **`/bin/bash` 3.2** until `brew bundle` installs Homebrew bash (`run_onchange_02-brew-bundle.sh.tmpl`). Anything that runs before that point (the audit helpers, the drift scripts) must stay 3.2-compatible: no `${var,,}`/`${var^}` case-modifying expansion, no `readarray`/`mapfile`, no `declare -A`.
+
+    **Why it bit**: `normalize_bool`'s `${1,,}` threw `bad substitution` under 3.2 (#143). Note the failure mode — it's the opposite of what you'd expect. `normalize_bool` is called in command substitution (`exp_n=$(normalize_bool "$expected")`), so the *subshell* died and both sides came back **empty**. `[[ "" == "" ]]` then counted every `-bool` key as **matched**: the audit reported a false all-clear and silently hid real drift, rather than inflating it. A guard that fails open is worse than one that fails loud — which is why the fix is paired with a pre-commit gate rather than trusting review to catch the next instance.
+
+    **The guard**: `scripts/check-bash4-isms.sh`, a pre-commit hook, sweeps every `executable_*` file and the root `run_once_*`/`run_onchange_*` scripts for this construct class. It's a required check on `main` (`pre-commit (all hooks)`) — unlike a bats assertion of the same shape, it actually blocks a regression from landing. `make ci` does **not** run pre-commit, so this class isn't caught by a local `make ci` pass; run `pre-commit run --all-files` (or just commit — the hook is installed) to exercise it.
+
+    **The strip must stay non-greedy**: `.tmpl` files are scanned with their `{{ }}` actions removed by `scripts/strip-template-actions.sh` — the same helper the Makefile's `lint` target pipes templates through before ShellCheck, so the two scans can't drift apart. Its substitution class is `[^{}]*`, not `.*`. A greedy `.*` spans from the *first* `{{` to the *last* `}}` on a line, so real shell sitting between two actions (`{{ if x }}v=${1,,}{{ end }}`) is deleted along with them and reaches neither the guard nor ShellCheck — a false all-clear of exactly the shape above.
+
 ## CLI / workflow traps
 
 !!! warning "`gh pr merge --rebase` is disabled at the repo level"

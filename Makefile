@@ -21,7 +21,7 @@ lint: ## Run ShellCheck on all .sh, .sh.tmpl, executable_* files
 	done
 	@find . -name '*.sh.tmpl' -not -path './.git/*' | while read -r file; do \
 		echo "  $$file (template)"; \
-		sed -E 's/\{\{.*\}\}//g' "$$file" | shellcheck -s bash -; \
+		scripts/strip-template-actions.sh "$$file" | shellcheck -s bash -; \
 	done
 	@echo "All ShellCheck checks passed."
 
