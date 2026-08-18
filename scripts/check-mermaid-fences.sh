@@ -12,6 +12,15 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
 if [[ $# -eq 0 ]]; then
+    # TODO(bash-3.2): `mapfile` is bash-4-only. This is a `language: system`
+    # pre-commit hook, so `#!/usr/bin/env bash` resolves the ambient PATH —
+    # /bin/bash 3.2 on a fresh Mac before `brew bundle` lands (see
+    # docs/gotchas.md's "env bash is bash 3.2 during the bootstrap window",
+    # and scripts/check-root-mirrors.sh for how a sibling hook stayed
+    # 3.2-safe). Not fixed here — scripts/check-bash4-isms.sh deliberately
+    # excludes scripts/*.sh (different risk class from the chezmoi-deployed
+    # scripts it guards), so this doesn't fail CI today, but a contributor
+    # relying on this hook before `brew bundle` has run will hit it.
     mapfile -t files < <(find docs -name '*.md' -type f 2>/dev/null)
 else
     files=("$@")

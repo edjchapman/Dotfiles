@@ -67,13 +67,9 @@ repos:
             pass_filenames: false
             files: '\.(sh|sh\.tmpl)$|^executable_'
 
-          # Blocks bash-4-only constructs (${var,,}, readarray/mapfile,
-          # declare -A) in scripts chezmoi runs during the fresh-machine
-          # bootstrap window, before `brew bundle` installs Homebrew bash and
-          # `env bash` still resolves to /bin/bash 3.2. bats coverage of this
-          # same class (tests/audits.bats) isn't a required CI check
-          # (docs/gotchas.md) — this hook is what actually blocks a
-          # regression from landing.
+          # Blocks bash-4-only constructs in bootstrap-window scripts — see
+          # docs/gotchas.md's "env bash is bash 3.2 during the bootstrap
+          # window" for why this hook exists and what it replaces.
           - id: check-bash4-isms
             name: no bash-4-only constructs in bootstrap-window scripts
             entry: scripts/check-bash4-isms.sh

@@ -83,6 +83,13 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! info "App Store apps need `mas` to install via Brewfile"
     `mas` is in the Brewfile and lets `mas` lines work. But you must be signed in to the App Store first. The new-machine runbook covers this.
 
+!!! danger "`env bash` is bash 3.2 during the bootstrap window"
+    Every chezmoi-deployed script uses `#!/usr/bin/env bash`, which resolves against the ambient `PATH` — on a fresh Mac that's **`/bin/bash` 3.2** until `brew bundle` installs Homebrew bash (`run_onchange_02-brew-bundle.sh.tmpl`). Anything that runs before that point (the audit helpers, the drift scripts) must stay 3.2-compatible: no `${var,,}`/`${var^}` case-modifying expansion, no `readarray`/`mapfile`, no `declare -A`.
+
+    **Why it bit**: `normalize_bool`'s `${1,,}` threw `bad substitution` under 3.2, turning every `-bool` comparison into a false mismatch (#143).
+
+    **The guard**: `scripts/check-bash4-isms.sh`, a pre-commit hook, sweeps every `executable_*` file and the root `run_once_*`/`run_onchange_*` scripts for this construct class. It's a required check on `main` (`pre-commit (all hooks)`) — unlike a bats assertion of the same shape, it actually blocks a regression from landing. `make ci` does **not** run pre-commit, so this class isn't caught by a local `make ci` pass; run `pre-commit run --all-files` (or just commit — the hook is installed) to exercise it.
+
 ## CLI / workflow traps
 
 !!! warning "`gh pr merge --rebase` is disabled at the repo level"

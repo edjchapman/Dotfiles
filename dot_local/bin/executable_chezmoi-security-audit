@@ -352,13 +352,15 @@ if [[ -f $SU_CACHE ]]; then
         pending=$(grep -cE '^\* Label:|^   Title:' "$SU_CACHE" 2>/dev/null) || true
         # The outer gate (bare 'Label'/'Title' anywhere) is looser than the
         # anchored count patterns above, so it can match while the count comes
-        # back 0 — e.g. the word appears in a preamble line that isn't a
-        # `* Label:`/`   Title:` entry. A "0 update(s) pending" fail was
-        # nonsensical; treat a zero count as ok rather than failing on it.
+        # back 0 — e.g. `softwareupdate`'s output format has drifted from what
+        # the patterns expect. That's "couldn't parse", not "verified zero
+        # pending" — the same uncertainty the `else` branch below already
+        # calls `skip` for a completely unrecognised cache, so treat it the
+        # same way here rather than asserting `ok` on data we don't trust.
         if ((pending > 0)); then
             check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
         else
-            check "macOS software updates" ok
+            check "macOS software updates" skip
         fi
     else
         check "macOS software updates" skip

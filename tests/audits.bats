@@ -4,11 +4,10 @@
 # The function is extracted with sed and driven directly, same pattern as
 # brew-sync.bats and the brewup() tests.
 #
-# The broader bash-4-ism class (${var,,}/^^, readarray/mapfile, declare -A)
-# is guarded by scripts/check-bash4-isms.sh, a pre-commit hook, not a bats
-# test here: `bats unit tests` isn't among the 12 required checks on `main`
-# (docs/gotchas.md), so a source-text assertion in this file is advisory only
-# and can't actually block a regression from landing. The pre-commit hook can.
+# The broader bash-4-ism class is guarded by scripts/check-bash4-isms.sh, a
+# pre-commit hook, not a bats test here — see docs/gotchas.md's "env bash is
+# bash 3.2 during the bootstrap window" for why a bats assertion of that
+# shape would only be advisory.
 
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
