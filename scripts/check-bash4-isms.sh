@@ -9,10 +9,20 @@
 # Kept 3.2-safe itself: this is a `language: system` pre-commit hook, so its
 # own `#!/usr/bin/env bash` resolves the same way (see check-root-mirrors.sh's
 # header comment for the same caveat).
+#
+# Usage: check-bash4-isms.sh [scan-root]
+# Defaults to the repo root, which is how pre-commit invokes it. The optional
+# argument exists so tests/audits.bats can point the real script at a scratch
+# directory instead of planting probe files inside the chezmoi source state —
+# a probe left behind by an interrupted run is deployable by the next
+# `chezmoi apply` and shows up as drift in `chezmoi verify`.
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$REPO_ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STRIP="$SCRIPT_DIR/strip-template-actions.sh"
+
+SCAN_ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+cd "$SCAN_ROOT"
 
 # bash-4-only constructs guarded against:
 #   ${v,,} ${v,} ${v^^} ${v^}  - case-modifying parameter expansion. The name
@@ -23,8 +33,10 @@ cd "$REPO_ROOT"
 #                                leading-digit-excluding class missed it.
 #                                [@*] covers ${@,,}.
 #   declare/local/typeset/     - associative arrays. Matches -A anywhere in a
-#   readonly -A                  flag cluster (-Ag, -gA) and every builtin
-#                                that accepts it, not just `declare -A`.
+#   readonly -A                  flag cluster (-Ag, -gA) and each of the four
+#                                builtins that accept it, not just
+#                                `declare -A`. All four are pinned by the
+#                                must-catch loop in tests/audits.bats.
 #   readarray / mapfile        - builtin, in command position. The preceding
 #                                class includes ( and ` so $(mapfile …) and
 #                                backtick calls are caught, not just
@@ -60,9 +72,11 @@ check_file() {
 # scanned with raw {{ }} syntax still in it.
 while IFS= read -r -d '' file; do
     case "$file" in
-        # Same strip-then-lint technique as Makefile:24's ShellCheck pass —
-        # template-only logic inside {{ }} isn't actually checked either way.
-        *.tmpl) check_file "$file" <(sed -E 's/\{\{.*\}\}//g' "$file") ;;
+        # Same strip helper the Makefile's `lint` target pipes .sh.tmpl files
+        # through before ShellCheck — one definition of the strip so the two
+        # scans can't disagree. Template-only logic inside {{ }} is unchecked
+        # by both; shell outside it is checked by both.
+        *.tmpl) check_file "$file" <("$STRIP" "$file") ;;
         *) check_file "$file" "$file" ;;
     esac
 done < <(find . -not -path './.git/*' -type f \

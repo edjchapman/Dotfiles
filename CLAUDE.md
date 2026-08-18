@@ -146,7 +146,7 @@ Standups are **not** committed to this repo. They are delivered to the pinned Gi
 - **Committing standup logs.** `standups/` is `.gitignore`d; the canonical record is the pinned tracking issue #114. Don't re-add the directory to git.
 - **Committing the rendered Brewfile.** `Brewfile.tmpl` is the source; the generated `~/Brewfile` (during apply) must not be committed. `.chezmoiignore` already covers this.
 - **Forgetting `--encrypt`.** `chezmoi add ~/.zshrc.local` (no flag) commits plaintext secrets. Always use `--encrypt` for any file containing credentials.
-- **ShellCheck false negatives in `.tmpl` files.** The Makefile strips `{{…}}` before piping to ShellCheck — beware that template-only logic isn't actually checked.
+- **ShellCheck false negatives in `.tmpl` files.** `scripts/strip-template-actions.sh` removes `{{…}}` before the Makefile pipes a template to ShellCheck (the bash-4-ism guard uses the same helper) — beware that template-only logic isn't actually checked. Keep the strip non-greedy; see `docs/gotchas.md`.
 - **`chezmoi apply` on a misconfigured template.** If a template renders to invalid shell, your `~/.zshrc` becomes broken and your next shell session may fail to start. Always `make verify-templates` and `chezmoi diff` first.
 
 ## Self-checking and self-updating

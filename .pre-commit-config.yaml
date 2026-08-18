@@ -74,13 +74,14 @@ repos:
           # script always sweeps its own scope, which it defines itself and is
           # the single source of truth for. Keep this pattern loose enough to
           # fire whenever an in-scope file changes; it does not need to mirror
-          # the script's find(1) expression exactly.
+          # the script's find(1) expression exactly. The guard and its strip
+          # helper are in the trigger too, so editing either re-runs the sweep.
           - id: check-bash4-isms
             name: no bash-4-only constructs in bootstrap-window scripts
             entry: scripts/check-bash4-isms.sh
             language: system
             pass_filenames: false
-            files: '(^|/)executable_[^/]*$|^(run_once_|run_onchange_)[^/]*$'
+            files: '(^|/)executable_[^/]*$|^(run_once_|run_onchange_)[^/]*$|^scripts/(check-bash4-isms|strip-template-actions)\.sh$'
 
           # Quick single-render template validation (full matrix runs in CI).
           - id: chezmoi-execute-template

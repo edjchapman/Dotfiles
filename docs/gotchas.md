@@ -90,6 +90,8 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 
     **The guard**: `scripts/check-bash4-isms.sh`, a pre-commit hook, sweeps every `executable_*` file and the root `run_once_*`/`run_onchange_*` scripts for this construct class. It's a required check on `main` (`pre-commit (all hooks)`) — unlike a bats assertion of the same shape, it actually blocks a regression from landing. `make ci` does **not** run pre-commit, so this class isn't caught by a local `make ci` pass; run `pre-commit run --all-files` (or just commit — the hook is installed) to exercise it.
 
+    **The strip must stay non-greedy**: `.tmpl` files are scanned with their `{{ }}` actions removed by `scripts/strip-template-actions.sh` — the same helper the Makefile's `lint` target pipes templates through before ShellCheck, so the two scans can't drift apart. Its substitution class is `[^{}]*`, not `.*`. A greedy `.*` spans from the *first* `{{` to the *last* `}}` on a line, so real shell sitting between two actions (`{{ if x }}v=${1,,}{{ end }}`) is deleted along with them and reaches neither the guard nor ShellCheck — a false all-clear of exactly the shape above.
+
 ## CLI / workflow traps
 
 !!! warning "`gh pr merge --rebase` is disabled at the repo level"

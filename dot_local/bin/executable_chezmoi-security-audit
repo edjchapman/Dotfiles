@@ -360,8 +360,9 @@ if [[ -f $SU_CACHE ]]; then
         # never sees); and the old `fail` said "0 update(s) pending", which is
         # nonsense. Fail loudly with an accurate reason instead — a parser
         # that has stopped recognising pending updates is itself the security
-        # problem, and failing open is what made the bash-3.2 bug above so
-        # hard to notice.
+        # problem, and failing open is what made the bash-3.2 `normalize_bool`
+        # bug (docs/gotchas.md, "env bash is bash 3.2 during the bootstrap
+        # window") so hard to notice.
         if ((pending > 0)); then
             check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
         else
