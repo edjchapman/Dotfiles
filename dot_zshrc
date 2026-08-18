@@ -39,8 +39,13 @@ plugins=(
 
 # Completion fpath (custom ~/.zfunc + brew) — set BEFORE oh-my-zsh sources so its
 # single compinit picks these up; this avoids running a second compinit later.
+# HOMEBREW_PREFIX is exported by `brew shellenv` in .zprofile, so the
+# $(brew --prefix) fork (~10ms, measured) only pays on shells that skipped
+# .zprofile (non-login zsh with a clean environment).
 fpath=(~/.zfunc $fpath)
-if type brew &>/dev/null; then
+if [[ -n ${HOMEBREW_PREFIX:-} ]]; then
+    FPATH=$HOMEBREW_PREFIX/share/zsh-completions:$FPATH
+elif type brew &>/dev/null; then
     FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
 fi
 
@@ -199,8 +204,10 @@ alias brewlog='tail -F ~/.cache/brewup.log'
 # every shell and tmux pane. A TTL-bounded refresh is kicked off in the
 # background instead — it only re-runs the full check when the cache is older
 # than $CHEZMOI_DRIFT_TTL (default 4h), otherwise it's a no-op.
-# CHEZMOI_DRIFT_QUIET=1 silences the banner only; the cache still refreshes
-# and the daily launchd notification still fires.
+# CHEZMOI_DRIFT_QUIET=1 skips this whole block — the banner AND its
+# TTL-gated background refresh. The cache still refreshes elsewhere (the
+# daily launchd run, and the brew/mas/chezmoi wrappers below), and the daily
+# launchd notification still fires.
 if [[ -z "${CHEZMOI_DRIFT_QUIET:-}" ]] && command -v chezmoi-drift-check &>/dev/null; then
   _drift_state="${XDG_CACHE_HOME:-$HOME/.cache}/chezmoi-drift/state"
   _cache_age=-1
