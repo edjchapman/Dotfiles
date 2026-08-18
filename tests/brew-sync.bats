@@ -10,7 +10,14 @@ setup() {
     SYNC="$REPO_ROOT/dot_local/bin/executable_chezmoi-brew-sync"
 
     TMPHOME="$(mktemp -d)"
+    # Nothing here touches the real machine: HOME and XDG_CACHE_HOME are both
+    # temporary. HOME matters for gate_setup below, which runs real git — a
+    # `commit.gpgsign`, `core.hooksPath`, or `init.templateDir` in the user's
+    # global config would otherwise hang or fail these tests under a local
+    # `make ci` while CI's clean runner stayed green.
+    export HOME="$TMPHOME/home"
     export XDG_CACHE_HOME="$TMPHOME/cache"
+    mkdir -p "$HOME"
 
     # Extract the two functions under test. Guard against a silent zero-byte
     # extraction (renamed function, moved anchor) — that would make every
@@ -95,7 +102,7 @@ gate_setup() {
     SRCDIR="$TMPHOME/src"
     mkdir -p "$SRCDIR" "$TMPHOME/bin" "$XDG_CACHE_HOME/chezmoi-brew-inbox"
     printf '# CLI Tools\nbrew "bat"\n' >"$SRCDIR/Brewfile.tmpl"
-    git -C "$SRCDIR" init -q
+    git -C "$SRCDIR" init -q -b main
     git -C "$SRCDIR" config user.email test@example.com
     git -C "$SRCDIR" config user.name test
     git -C "$SRCDIR" add Brewfile.tmpl
