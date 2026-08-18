@@ -123,8 +123,15 @@ parse_expectations() {
 
 # `defaults write -bool` accepts true/false/yes/no/1/0; `defaults read` always
 # returns 1 or 0. Normalise both sides for comparison.
+# tr rather than the bash-4 ",," lowercase expansion: this script's `env bash`
+# shebang resolves to /bin/bash 3.2 on a fresh machine until brew bundle has
+# installed Homebrew bash — where that expansion threw "bad substitution" per
+# -bool line and turned every boolean into a false mismatch.
+# tests/audits.bats guards the whole bash-4-ism class for both audit helpers.
 normalize_bool() {
-    case "${1,,}" in
+    local v
+    v=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    case "$v" in
         true | yes | 1) echo 1 ;;
         false | no | 0) echo 0 ;;
         *) echo "$1" ;;
