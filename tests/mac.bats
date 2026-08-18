@@ -276,8 +276,14 @@ STUB
 @test "per-package and per-file branches refresh only after a real mutation" {
     # brew-extra refreshes after uninstalls/adopts; backup after apply/re-add.
     # A user who skips every prompt must not pay for a full drift check.
-    run grep -c '&& refresh_drift$' "$FIX"
+    run grep -cE '^ *if \(\(.*\)\); then refresh_drift; fi$' "$FIX"
     [ "$output" = "2" ]
+
+    # ...and never as a branch-final `cond && refresh_drift`. That form makes a
+    # false guard the branch's — and so the script's — exit status, so a user
+    # who skips every prompt exits 1. Regression guard: it shipped that way once.
+    run grep -E '&& refresh_drift' "$FIX"
+    [ "$status" -ne 0 ]
 }
 
 @test "is-tap: a bare org/tap is a tap (untap, not uninstall)" {

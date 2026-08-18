@@ -330,7 +330,7 @@ case "$id" in
         fi
         # Uninstalls (and adopts whose merge was declined) changed what the
         # BREW_EXTRA count would find; skipping everything changed nothing.
-        ((removed > 0 || adopted > 0)) && refresh_drift
+        if ((removed > 0 || adopted > 0)); then refresh_drift; fi
         ;;
     backup)
         # Walk each drifted file: show its diff, then choose a direction —
@@ -341,7 +341,7 @@ case "$id" in
         src_dir=$(chezmoi source-path)
         status_re='^[ ADMR][ ADMR] '
         backed_up=()
-        mutated=0
+        changed=0
         while IFS= read -r line; do
             [[ $line =~ $status_re ]] || continue
             rel=${line:3}
@@ -360,7 +360,7 @@ case "$id" in
                 a | A)
                     if chezmoi apply -- "$target"; then
                         echo "   applied repo version"
-                        mutated=1
+                        changed=1
                     fi
                     ;;
                 b | B)
@@ -373,8 +373,7 @@ case "$id" in
                 *) echo "   skipped" ;;
             esac
         done < <(chezmoi status --exclude=externals 2>/dev/null)
-        ((${#backed_up[@]} > 0)) && mutated=1
-        ((mutated)) && refresh_drift
+        if ((changed || ${#backed_up[@]} > 0)); then refresh_drift; fi
         if ((${#backed_up[@]} > 0)); then
             echo
             echo "Backed up ${#backed_up[@]} $(plural "${#backed_up[@]}" file) into the source repo."
