@@ -352,15 +352,20 @@ if [[ -f $SU_CACHE ]]; then
         pending=$(grep -cE '^\* Label:|^   Title:' "$SU_CACHE" 2>/dev/null) || true
         # The outer gate (bare 'Label'/'Title' anywhere) is looser than the
         # anchored count patterns above, so it can match while the count comes
-        # back 0 — e.g. `softwareupdate`'s output format has drifted from what
-        # the patterns expect. That's "couldn't parse", not "verified zero
-        # pending" — the same uncertainty the `else` branch below already
-        # calls `skip` for a completely unrecognised cache, so treat it the
-        # same way here rather than asserting `ok` on data we don't trust.
+        # back 0 — most plausibly because `softwareupdate`'s output format
+        # drifted from what the anchors expect. Three bad options and one
+        # right one: `ok` would assert "verified clean" on data we couldn't
+        # parse; `skip` is honest but silent (check() carries a detail string
+        # only for `fail`, so a skip is an anonymous counter bump the user
+        # never sees); and the old `fail` said "0 update(s) pending", which is
+        # nonsense. Fail loudly with an accurate reason instead — a parser
+        # that has stopped recognising pending updates is itself the security
+        # problem, and failing open is what made the bash-3.2 bug above so
+        # hard to notice.
         if ((pending > 0)); then
             check "macOS software updates" fail "$pending update(s) pending — \`softwareupdate -l\` to inspect, then install via System Settings"
         else
-            check "macOS software updates" skip
+            check "macOS software updates" fail "cannot parse the softwareupdate cache — its format may have changed, so pending updates would go undetected. Run \`softwareupdate -l\` manually, then check the '^* Label:'/'^   Title:' patterns in this script"
         fi
     else
         check "macOS software updates" skip

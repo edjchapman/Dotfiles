@@ -15,12 +15,27 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
 # bash-4-only constructs guarded against:
-#   ${var,,} ${var,} ${var^^} ${var^}  - case-modifying parameter expansion
-#   readarray / mapfile                 - builtin (anchored to command position)
-#   declare -A                          - associative arrays
+#   ${v,,} ${v,} ${v^^} ${v^}  - case-modifying parameter expansion. The name
+#                                class is [A-Za-z_0-9]+ (not the usual
+#                                identifier shape) so POSITIONAL parameters
+#                                are covered: ${1,,} is the exact construct
+#                                this repo's normalize_bool had, and a
+#                                leading-digit-excluding class missed it.
+#                                [@*] covers ${@,,}.
+#   declare/local/typeset/     - associative arrays. Matches -A anywhere in a
+#   readonly -A                  flag cluster (-Ag, -gA) and every builtin
+#                                that accepts it, not just `declare -A`.
+#   readarray / mapfile        - builtin, in command position. The preceding
+#                                class includes ( and ` so $(mapfile …) and
+#                                backtick calls are caught, not just
+#                                line-leading ones.
 # Full-line comments are filtered out below so a comment that merely mentions
 # one of these doesn't false-positive the guard.
-PATTERN='\$\{[A-Za-z_][A-Za-z_0-9]*(\[[^]]*\])?(,,|,|\^\^|\^)|(^|[;&|[:space:]])(readarray|mapfile)\b|declare[[:space:]]+-A\b'
+# tests/audits.bats pins this pattern's coverage in both directions — every
+# construct above, plus near-miss negatives (${v//,/;}, `declare -a`,
+# `grep -A 3`) that must NOT trip it. Extend the tests alongside the pattern.
+# shellcheck disable=SC2016  # the $ and ${ here are literal regex, not expansion
+PATTERN='\$\{[#!]?([A-Za-z_0-9]+|[@*])(\[[^]]*\])?(,,?|\^\^?)|(^|[;&|(`{[:space:]])(declare|typeset|local|readonly)[[:space:]]+-[A-Za-z]*A|(^|[;&|(`{[:space:]])(readarray|mapfile)([[:space:]]|$)'
 
 fail=0
 
