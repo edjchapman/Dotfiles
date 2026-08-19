@@ -13,8 +13,10 @@ echo "Applying macOS defaults..."
 # Auto-hide the Dock
 defaults write com.apple.dock autohide -bool true
 
-# Set Dock icon size
-defaults write com.apple.dock tilesize -int 48
+# Set Dock icon size. 34, not the macOS stock 48 — adopted from the live
+# machine, where it had been set by hand (dragging the Dock divider) and was
+# showing as drift against this script on every audit run.
+defaults write com.apple.dock tilesize -int 34
 
 # Don't show recent apps in Dock
 defaults write com.apple.dock show-recents -bool false
