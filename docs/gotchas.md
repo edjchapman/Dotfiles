@@ -103,6 +103,13 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! warning "Don't `--no-verify` past the pre-commit hooks"
     `git commit --no-verify` bypasses every secret-scan and lint hook. If a hook is genuinely wrong, fix it. The hooks exist to stop secret leaks — the cost of bypassing is much higher than the cost of fixing the hook.
 
+!!! danger "Never parse the hook payload with a regex"
+    `.claude/hooks/guard-destructive.sh` receives a JSON payload on stdin and decides whether to refuse a Bash call. It used to pull the command out with `sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'`, and that **failed open**: `[^"]*` stops at the first *escaped* quote inside the JSON string, so `echo "hi" && chezmoi apply` arrived as the harmless `echo \` and passed every rule. The `.*` prefix was greedy too, so a payload mentioning `command` twice matched the wrong one. It now parses with `python3 -c 'json.load(...)'`, and if the parser is missing or the payload won't parse it scans the **raw payload** — over-blocking rather than under-blocking.
+
+    The mirror-image defect: a raw substring match also fires on a guarded phrase that is merely *quoted as data*, so a commit message discussing `chezmoi apply` was refused. Heredoc bodies are now stripped before matching — but only when nothing in the command could execute them. `bash <<EOF`, `… | sh`, `python3 -c`, `xargs` and friends keep their bodies scanned, because there the body **is** code.
+
+    Both directions are pinned by `tests/guard-destructive.bats`, which builds payloads with a real JSON encoder. The previous suite interpolated into a format string and therefore *could not express* a command containing a quote — which is precisely why the fail-open survived 14 passing tests. If you touch this hook, run those tests against the old version first and watch them go red.
+
 ## See also
 
 - [Troubleshooting](troubleshooting.md) — when you have an error, this is where the *fix* lives.
