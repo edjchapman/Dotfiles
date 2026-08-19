@@ -2,6 +2,9 @@
 # Applied automatically by chezmoi when this file changes
 # To add packages: edit this file, then run `chezmoi apply`
 
+# Taps
+tap "hashicorp/tap"
+
 # CLI Tools
 brew "bash"
 brew "bat"
@@ -44,6 +47,7 @@ brew "ruby"
 {{ if eq .machine_type "personal" -}}
 brew "sherlock"
 {{ end -}}
+brew "hashicorp/tap/terraform"
 brew "tlrc"
 brew "tree"
 brew "valkey"
