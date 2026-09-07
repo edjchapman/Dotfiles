@@ -251,6 +251,82 @@ EOF
     [ "$drift_total" -eq 9 ]
 }
 
+@test "a brew-side failure suppresses both brew counts, not just the failing probe's" {
+    # Replays the 2026-09-07 incident: a formulae-API outage made `bundle
+    # check` "succeed" with phantom "needs to be installed" lines while only
+    # `cleanup` visibly failed. The three brew probes share one substrate, so
+    # any failure among them must discard both brew counts — otherwise the
+    # phantom brew-missing count is reported as trustworthy drift.
+    make_stubs
+    cat >"$TMPHOME/bin/brew" <<'EOF'
+#!/bin/sh
+case "$2" in
+    check)
+        printf 'Homebrew Bundle: foo needs to be installed\n'
+        printf 'Homebrew Bundle: bar needs to be installed\n'
+        printf 'Homebrew Bundle: baz needs to be installed\n'
+        exit 1
+        ;;
+    cleanup)
+        printf 'Error: Cannot download non-corrupt packages.json!\n'
+        exit 1
+        ;;
+esac
+exit 0
+EOF
+    chmod +x "$TMPHOME/bin/brew"
+
+    run "$DRIFT_CHECK" --full --quiet
+    [ "$status" -eq 2 ]
+
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 1 ]
+    [ "$BREW_MISSING" -eq 0 ]
+    [ "$BREW_EXTRA" -eq 0 ]
+    # Untainted domains keep their counts: the taint must not spread.
+    [ "$HOME_DRIFT" -eq 2 ]
+    [[ "$banner" != *"brew-missing"* ]]
+    [[ "$banner" == *"check-error"* ]]
+    [[ "$summary" == *"brew bundle cleanup failed"* ]]
+    [[ "$summary" == *"affected counts suppressed"* ]]
+    [[ "$summary" != *"brew-missing"* ]]
+}
+
+@test "a check failure suppresses the extras count and names too" {
+    # The taint runs both ways: a failed `bundle check` discards what a
+    # "successful" cleanup dry-run reported, names included — chezmoi-fix's
+    # brew-extra menu is built from BREW_EXTRA_NAMES and must not act on
+    # names gathered from an unhealthy brew.
+    make_stubs
+    cat >"$TMPHOME/bin/brew" <<'EOF'
+#!/bin/sh
+case "$2" in
+    check)
+        printf 'Error: brew exploded\n'
+        exit 1
+        ;;
+    cleanup)
+        printf 'Would uninstall formulae:\nrestic\n'
+        exit 0
+        ;;
+esac
+exit 0
+EOF
+    chmod +x "$TMPHOME/bin/brew"
+
+    run "$DRIFT_CHECK" --full --quiet
+    [ "$status" -eq 2 ]
+
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 1 ]
+    [ "$BREW_EXTRA" -eq 0 ]
+    [ -z "$BREW_EXTRA_NAMES" ]
+    [[ "$banner" != *"brew-extra"* ]]
+    [[ "$summary" == *"brew bundle check failed"* ]]
+}
+
 @test "a clean full run writes an empty banner, not a missing one" {
     # The distinction the shell's fallback turns on: present-and-empty means
     # 'nothing to report', absent means 'this cache predates the field'.

@@ -17,3 +17,15 @@ zsh dotfiles. It comprises:
 - the test suite covering those helpers
 
 Distinct from the narrower "zsh dotfiles" (the three startup files alone).
+
+## Taint domain
+
+A group of drift signals whose checks share one substrate, so a failure in any
+one check makes every count in the group untrustworthy. A tainted domain's
+counts are suppressed everywhere (banner, summary, state file) — the named
+check error is the whole signal; a number that might be fabricated is never
+shown, caveated or otherwise.
+
+The brew signals (`brew-missing`, `brew-extra`) form one taint domain — their
+checks share brew, the formulae API, and the rendered Brewfile. The `home`,
+`defaults`, and `security` signals each stand alone.

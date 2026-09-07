@@ -24,6 +24,12 @@
 #   drift_total   sum of the five counts
 # Readers must treat `banner` and `drift_total` as optional: a cache written
 # before they existed can survive for up to $TTL.
+#
+# Error handling: a failed check suppresses every count in its taint domain
+# (the three brew probes share one domain; home/defaults/security stand alone)
+# rather than recording numbers that may be fabricated. HAD_ERROR=1 plus the
+# named failure in $summary is the whole signal; the counts written alongside
+# are only the ones still trustworthy.
 
 set -uo pipefail
 
@@ -234,11 +240,22 @@ else
 fi
 
 if command -v brew >/dev/null 2>&1; then
+    # The three brew probes below (template render, bundle check, cleanup
+    # dry-run) share one substrate: brew, the formulae API, and the rendered
+    # Brewfile. They form a single taint domain — a failure in any one is
+    # evidence the substrate is unhealthy, so BOTH brew counts are discarded,
+    # not just the failing probe's. Real incident (2026-09-07): a formulae-API
+    # outage made `bundle check` "succeed" with 26 phantom "needs to be
+    # installed" lines while only `cleanup` visibly failed; suppressing only
+    # the cleanup count would have reported brew-missing 26 as trustworthy.
+    # The other domains (home/defaults/security) are independent single
+    # probes; each already leaves its count at 0 when its own check fails.
+    brew_taint=0
     rendered=$(mktemp -t brewfile-rendered.XXXXXX)
     # shellcheck disable=SC2064
     trap "rm -f '$rendered'" EXIT INT TERM HUP
     if ! chezmoi execute-template <"$(chezmoi source-path)/Brewfile.tmpl" >"$rendered" 2>/dev/null; then
-        HAD_ERROR=1
+        brew_taint=1
         err_parts="${err_parts:+$err_parts; }Brewfile.tmpl render failed"
     else
         # Missing: brew bundle check exits non-zero when entries are missing OR when it
@@ -247,7 +264,7 @@ if command -v brew >/dev/null 2>&1; then
         verbose_rc=$?
         BREW_MISSING=$(printf '%s\n' "$verbose_out" | grep -cE '(needs to be installed|not installed)' || true)
         if [[ $verbose_rc -ne 0 && $BREW_MISSING -eq 0 ]]; then
-            HAD_ERROR=1
+            brew_taint=1
             err_parts="${err_parts:+$err_parts; }brew bundle check failed"
         fi
         # Extras: cleanup dry-run. Same pattern — non-zero exit with no matched lines means errored.
@@ -264,9 +281,15 @@ if command -v brew >/dev/null 2>&1; then
             BREW_EXTRA_NAMES=${BREW_EXTRA_NAMES% }
         fi
         if [[ $cleanup_rc -ne 0 && $BREW_EXTRA -eq 0 ]]; then
-            HAD_ERROR=1
+            brew_taint=1
             err_parts="${err_parts:+$err_parts; }brew bundle cleanup failed"
         fi
+    fi
+    if [[ $brew_taint -eq 1 ]]; then
+        HAD_ERROR=1
+        BREW_MISSING=0
+        BREW_EXTRA=0
+        BREW_EXTRA_NAMES=""
     fi
 fi
 
@@ -313,11 +336,14 @@ parts=""
 [[ $SECURITY_DRIFT -gt 0 ]] && parts="${parts:+$parts, }security: $SECURITY_DRIFT"
 [[ $BREWUP_FAILED -eq 1 ]] && parts="${parts:+$parts, }brewup: failed"
 
+# Any count surviving into $parts is trustworthy: a domain whose check failed
+# has had its counts suppressed to 0 above, so the error clause names what is
+# missing rather than caveating the numbers that remain.
 if [[ $HAD_ERROR -eq 1 ]]; then
     if [[ -n $parts ]]; then
-        summary="drift: $parts · ERROR: $err_parts (counts may be incomplete)"
+        summary="drift: $parts · ERROR: $err_parts (affected counts suppressed)"
     else
-        summary="drift: ERROR: $err_parts"
+        summary="drift: ERROR: $err_parts (affected counts suppressed)"
     fi
 elif [[ -z $parts ]]; then
     summary="drift: clean"
