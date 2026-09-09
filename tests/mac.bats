@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
 # Tests for chezmoi-fix (the `mac` alias) and chezmoi-drift-check summary text.
 # Runs against a synthetic drift state file under a temporary XDG_CACHE_HOME.
-# Menu-rendering tests use CHEZMOI_FIX_TEST_MODE=1, which skips the
-# chezmoi/TTY/refresh preconditions and exits after the menu. Dispatch tests
-# run the script for real, feeding prompt answers through the CHEZMOI_FIX_TTY
-# seam — see feed_tty in helpers.bash for the fifo mechanism and why a plain
-# answers file cannot work.
+# Menu-rendering tests use the shipped `--menu` flag, which renders the menu
+# from the cached state (no chezmoi, no TTY, no refresh) and exits. Dispatch
+# tests run the script for real, feeding prompt answers through the
+# CHEZMOI_FIX_TTY seam — see feed_tty in helpers.bash for the fifo mechanism
+# and why a plain answers file cannot work.
 
 load helpers
 
@@ -17,7 +17,6 @@ setup() {
     TMPHOME="$(mktemp -d)"
     export XDG_CACHE_HOME="$TMPHOME/cache"
     mkdir -p "$XDG_CACHE_HOME/chezmoi-drift"
-    export CHEZMOI_FIX_TEST_MODE=1
 
     # The menu code gates the defaults/security entries on `command -v` finding
     # the respective audit binary. Tests check menu rendering, not the audits
@@ -40,16 +39,15 @@ teardown() {
 # write_state comes from tests/helpers.bash (loaded above) — shared with
 # drift-check.bats so both suites synthesize state files the same way.
 
-# A no-op chezmoi so the non-test-mode prerequisite check passes.
+# A no-op chezmoi so the interactive-mode prerequisite check passes.
 stub_chezmoi() {
     printf '#!/bin/sh\nexit 0\n' >"$TMPHOME/bin/chezmoi"
     chmod +x "$TMPHOME/bin/chezmoi"
 }
 
-# Run chezmoi-fix for real (test mode off), answering its prompts in order
+# Run chezmoi-fix for real (interactive mode), answering its prompts in order
 # from the arguments via the TTY seam.
 drive_fix() {
-    export CHEZMOI_FIX_TEST_MODE=0
     export CHEZMOI_FIX_TTY="$TMPHOME/tty"
     feed_tty "$TMPHOME/tty" "$@"
     run "$FIX"
@@ -57,7 +55,7 @@ drive_fix() {
 
 @test "clean state prints 'No drift detected' and exits" {
     write_state summary='drift: clean'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"No drift detected"* ]]
 }
@@ -67,14 +65,14 @@ drive_fix() {
     # the clean-state early exit would print "Nothing to fix" while daily brew
     # maintenance stays broken — the exact silence this signal exists to end.
     write_state brewup=1 summary='drift: clean'
-    HOME="$TMPHOME" run "$FIX"
+    HOME="$TMPHOME" run "$FIX" --menu
     [[ "$output" == *"last daily run FAILED"* ]]
     [[ "$output" != *"Nothing to fix"* ]]
 }
 
 @test "failed brewup still renders the menu rather than exiting early" {
     write_state brewup=1 summary='drift: clean'
-    HOME="$TMPHOME" run "$FIX"
+    HOME="$TMPHOME" run "$FIX" --menu
     [[ "$output" == *"brewlog"* ]]
     # Audit/doctor entries remain reachable while brewup is broken.
     [[ "$output" == *"dismiss"* || "$output" == *"doctor"* ]]
@@ -84,7 +82,7 @@ drive_fix() {
     write_state brewup=1 summary='drift: clean'
     mkdir -p "$TMPHOME/.cache"
     echo "2026-08-11 14:34:58" >"$TMPHOME/.cache/brewup.failed"
-    HOME="$TMPHOME" run "$FIX"
+    HOME="$TMPHOME" run "$FIX" --menu
     [[ "$output" == *"2026-08-11 14:34:58"* ]]
 }
 
@@ -98,13 +96,13 @@ drive_fix() {
 BREWUP_FAIL="$HOME/.cache/relocated-brewup.failed"
 EOF
     echo "2026-08-11 14:34:58" >"$TMPHOME/.cache/relocated-brewup.failed"
-    HOME="$TMPHOME" run "$FIX"
+    HOME="$TMPHOME" run "$FIX" --menu
     [[ "$output" == *"2026-08-11 14:34:58"* ]]
 }
 
 @test "clean state with no brewup failure still exits quietly" {
     write_state brewup=0 summary='drift: clean'
-    HOME="$TMPHOME" run "$FIX"
+    HOME="$TMPHOME" run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"Nothing to fix"* ]]
     [[ "$output" != *"FAILED"* ]]
@@ -112,7 +110,7 @@ EOF
 
 @test "single security failure uses singular 'failure'" {
     write_state security=1 summary='drift: security: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"security baseline failure"* ]]
     [[ "$output" != *"failure(s)"* ]]
@@ -121,7 +119,7 @@ EOF
 
 @test "multiple security failures use plural 'failures'" {
     write_state security=3 summary='drift: security: 3'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"3 security baseline failures"* ]]
     [[ "$output" != *"failure(s)"* ]]
@@ -129,7 +127,7 @@ EOF
 
 @test "single home-file change uses singular 'change'" {
     write_state home=1 summary='drift: home: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"home-file change"* ]]
     [[ "$output" != *"change(s)"* ]]
@@ -137,7 +135,7 @@ EOF
 
 @test "single brew-extra package uses singular 'package'" {
     write_state brew_extra=1 summary='drift: brew-extra: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"brew-extra package"* ]]
     [[ "$output" != *"package(s)"* ]]
@@ -147,7 +145,7 @@ EOF
     # No defaults-audit / security-audit binaries on PATH, so neither audit
     # entry can be added — verify the menu still renders sanely.
     write_state security=1 summary='drift: security: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" != *"no known drift"* ]]
 }
@@ -157,14 +155,14 @@ EOF
     # suppress the "no known drift" entries — the user came to fix something,
     # not to browse audits.
     write_state error=1 summary='drift: ERROR: stubbed'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" != *"no known drift"* ]]
 }
 
 @test "menu arrow column is self-aligning" {
     write_state security=12 summary='drift: security: 12'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     # Every menu line containing an arrow should have the arrow at the same column.
     cols=$(printf '%s\n' "$output" \
@@ -176,7 +174,7 @@ EOF
 
 @test "doctor and dismiss options are always present" {
     write_state security=1 summary='drift: security: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"chezmoi doctor"* ]]
     [[ "$output" == *"CHEZMOI_DRIFT_QUIET=1"* ]]
@@ -184,7 +182,7 @@ EOF
 
 @test "home drift offers a single review-and-apply entry, no standalone diff" {
     write_state home=2 summary='drift: home: 2'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"Review diff & apply 2 home-file changes"* ]]
     [[ "$output" != *"Preview"* ]]
@@ -192,21 +190,21 @@ EOF
 
 @test "home drift offers a guided backup (re-add) entry" {
     write_state home=2 summary='drift: home: 2'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"Back up locally-edited files into the repo"* ]]
 }
 
 @test "backup entry is absent without home drift" {
     write_state brew_extra=1 extra_names='restic' summary='drift: brew-extra: 1'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" != *"Back up locally-edited"* ]]
 }
 
 @test "brew-extra entry offers per-package adopt/uninstall" {
     write_state brew_extra=2 extra_names='restic foo' summary='drift: brew-extra: 2'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"Resolve 2 brew-extra packages"* ]]
     [[ "$output" == *"adopt into Brewfile / uninstall"* ]]
@@ -214,14 +212,14 @@ EOF
 
 @test "apply entry names both home and brew-missing counts" {
     write_state home=1 brew_missing=3 summary='drift: home: 1, brew-missing: 3'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"Review diff & apply 1 home-file change + 3 missing brew packages"* ]]
 }
 
 @test "drift-check error prints a remediation hint" {
     write_state error=1 summary='drift: ERROR: Brewfile.tmpl render failed'
-    run "$FIX"
+    run "$FIX" --menu
     [ "$status" -eq 0 ]
     [[ "$output" == *"verify-templates"* ]]
     [[ "$output" == *"chezmoi doctor"* ]]
@@ -232,6 +230,52 @@ EOF
     # actually run drift-check (needs chezmoi/brew); we just grep the source.
     run grep -nE "run 'mac' to resolve" "$DRIFT_CHECK"
     [ "$status" -ne 0 ]
+}
+
+# --menu contract: render from the cache and stop. Each side effect the
+# interactive path has is asserted absent here, so a refactor that folds the
+# refresh or the prerequisite checks back into the shared path fails loudly.
+
+@test "--menu renders the menu with no chezmoi and no drift-check on PATH" {
+    write_state home=1 summary='drift: home: 1'
+    [[ -z $(command -v chezmoi) ]]
+    [[ -z $(command -v chezmoi-drift-check) ]]
+    run "$FIX" --menu
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"q) Quit"* ]]
+}
+
+@test "--menu neither refreshes the cache nor invokes drift-check" {
+    write_state home=1 summary='drift: home: 1'
+    printf '#!/bin/sh\ntouch "%s/drift-check-ran"\nexit 0\n' "$TMPHOME" \
+        >"$TMPHOME/bin/chezmoi-drift-check"
+    chmod +x "$TMPHOME/bin/chezmoi-drift-check"
+    before=$(cat "$XDG_CACHE_HOME/chezmoi-drift/state")
+    run "$FIX" --menu
+    [ "$status" -eq 0 ]
+    [[ ! -e "$TMPHOME/drift-check-ran" ]]
+    [[ "$(cat "$XDG_CACHE_HOME/chezmoi-drift/state")" == "$before" ]]
+    [[ "$output" != *"Refreshing drift signals"* ]]
+}
+
+@test "--menu does not read the TTY seam" {
+    write_state home=1 summary='drift: home: 1'
+    export CHEZMOI_FIX_TTY="$TMPHOME/no-such-tty"
+    run "$FIX" --menu
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"q) Quit"* ]]
+}
+
+@test "-h documents --menu and exits 0" {
+    run "$FIX" -h
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--menu"* ]]
+}
+
+@test "an unknown flag prints usage and exits 2" {
+    run "$FIX" --bogus
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"chezmoi-fix [--menu]"* ]]
 }
 
 @test "header reconciles cached vs fresh totals when they differ" {
@@ -265,8 +309,8 @@ EOF
 @test "a menu choice dispatches through the case to the selected tool" {
     # End-to-end through the seam: security drift makes the inspect entry
     # option 1; choosing it must reach the dispatch case, exec the audit tool,
-    # and propagate its exit status. This is the layer CHEZMOI_FIX_TEST_MODE
-    # (which exits after rendering the menu) could never reach.
+    # and propagate its exit status. This is the layer `--menu` (which exits
+    # after rendering the menu) never reaches.
     write_state security=1 summary='drift: security: 1'
     printf '#!/bin/sh\necho "security-audit ran: $*"\nexit 0\n' \
         >"$TMPHOME/bin/chezmoi-security-audit"
