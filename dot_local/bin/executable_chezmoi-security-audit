@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # chezmoi-security-audit — read-only check of the machine's security baseline.
 #
-# Verifies the protections that run_once_after_05-macos-sudo.sh tries to
+# Verifies the protections the sudo bootstrap script (macos-sudo.sh) tries to
 # establish (FileVault, SIP, firewall, guest account off), plus a few ongoing
 # hygiene checks (key permissions, GPG expiry, pending macOS updates). Counts
-# feed into chezmoi-drift-check as SECURITY_DRIFT.
+# feed into chezmoi-drift-check as SECURITY_DRIFT. The pmset and auto-update
+# expectations are read out of the bootstrap script at run time, never copied.
 #
 # Modes:
 #   (default)  Human report.
@@ -25,7 +26,8 @@ chezmoi-security-audit [--drift] [--quiet] [-h]
 Checks: FileVault, SIP, Gatekeeper, firewall+stealth, guest account, auto-login,
 remote Apple Events, SSH remote login, SSH key passphrase,
 AWS creds perms, age key perms, GPG signing key expiry (if configured),
-auto-update toggles, energy settings (pmset sleep/displaysleep/powernap),
+auto-update toggles and energy settings (pmset) — both read out of the sudo
+bootstrap script at run time, skipped if it cannot be sourced —
 softwareupdate pending.
 
 Exit codes: 0 clean, 1 drift, 2 audit error.
@@ -265,61 +267,200 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Automatic-update toggles — the switches run_once_after_05-macos-sudo.sh sets.
-# Distinct from the pending-updates check below (which counts what's waiting):
-# this confirms the machine is still configured to fetch & install updates,
-# including ConfigDataInstall (XProtect / security-definition data). The
-# /Library/Preferences plist is world-readable, so no sudo is needed.
+# Bootstrap-derived expectations. The pmset values and SoftwareUpdate toggles
+# this audit checks are whatever the sudo bootstrap script asserts — read out
+# of the script, not copied into this one. Same technique as
+# chezmoi-defaults-audit's parse_expectations: source the script in a subshell
+# with every command it runs replaced by a shell function, so the argv of the
+# calls we care about is captured fully expanded and nothing executes.
+#
+# History: these were hand-copied constants until Sep 2026. pmset drift is real
+# and silent — AC sleep was found drifted to 1 in Aug 2026 with nothing
+# flagging it, after the machine spent four days awake on the charger — and a
+# copy can only ever be as current as the last person who remembered to
+# update it.
+#
+# The bootstrap logic lives in the deployed script, not in the run_once
+# wrapper that execs it.
 # ------------------------------------------------------------------------------
-su_domain=/Library/Preferences/com.apple.SoftwareUpdate
-au_off=()
-# AutomaticCheckEnabled is intentionally NOT read from the defaults key: macOS 26
-# (Tahoe) no longer persists it there — the key vanishes even while auto-check is
-# on, giving a false negative. `softwareupdate --schedule` is the authoritative,
-# version-stable signal for the check toggle; the other four still live as keys.
-softwareupdate --schedule 2>/dev/null | grep -qi 'turned on' || au_off+=("automatic-check")
-for su_key in AutomaticDownload AutomaticallyInstallMacOSUpdates CriticalUpdateInstall ConfigDataInstall; do
-    [[ $(defaults read "$su_domain" "$su_key" 2>/dev/null) == 1 ]] || au_off+=("$su_key")
-done
-if ((${#au_off[@]} == 0)); then
-    check "Auto-update toggles" ok
-else
-    check "Auto-update toggles" fail "disabled: ${au_off[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
-fi
+BOOTSTRAP_REL=dot_config/chezmoi/scripts/executable_macos-sudo.sh
+
+bootstrap_script_path() {
+    local src
+    command -v chezmoi >/dev/null 2>&1 || return 1
+    src=$(chezmoi source-path 2>/dev/null) || return 1
+    [[ -f $src/$BOOTSTRAP_REL ]] || return 1
+    printf '%s\n' "$src/$BOOTSTRAP_REL"
+}
+
+# parse_bootstrap_expectations <script> — one TSV row per captured assertion,
+# last write wins per (kind, scope, key):
+#   pmset     <Battery|AC>  <key>  <value>
+#   swupdate  defaults      <key>  <0|1>     (defaults write … SoftwareUpdate)
+#   swupdate  schedule      check  <on|off>  (softwareupdate --schedule)
+# Non-zero exit means the script could not be sourced to completion.
+#
+# Safety: the script's own `set -euo pipefail` takes effect once sourced, so
+# every stub returns 0 — a non-zero stub would abort the source part-way and
+# hand back a silently truncated list. `sudo -v` in particular must succeed:
+# the script exits 0 (cleanly, no expectations) when it fails. Stubs use
+# `builtin printf` because `printf` and `echo` are themselves stubbed.
+parse_bootstrap_expectations() {
+    local script=$1
+    (
+        set +euo pipefail
+        # Everything below is invoked indirectly via `source`; the SC2329
+        # disables silence the "never invoked" note.
+        # shellcheck disable=SC2329
+        sudo() {
+            case "${1:-}" in
+                -v | -n | -k | -K) return 0 ;;
+                pmset | defaults | softwareupdate) "$@" ;;
+                *) return 0 ;;
+            esac
+        }
+        # shellcheck disable=SC2329
+        pmset() {
+            local scopes=() key value scope
+            case "${1:-}" in
+                -a) scopes=(Battery AC) ;;
+                -b) scopes=(Battery) ;;
+                -c) scopes=(AC) ;;
+                *) return 0 ;;
+            esac
+            shift
+            while (($# >= 2)); do
+                key=$1 value=$2
+                shift 2
+                for scope in "${scopes[@]}"; do
+                    builtin printf 'pmset\t%s\t%s\t%s\n' "$scope" "$key" "$value"
+                done
+            done
+            return 0
+        }
+        # shellcheck disable=SC2329
+        defaults() {
+            [[ ${1:-} == write && ${2:-} == */com.apple.SoftwareUpdate ]] || return 0
+            local key=${3:-} value=${5:-}
+            [[ ${4:-} == -bool ]] || return 0
+            case "$(builtin printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" in
+                true | yes | 1) value=1 ;;
+                false | no | 0) value=0 ;;
+                *) return 0 ;;
+            esac
+            builtin printf 'swupdate\tdefaults\t%s\t%s\n' "$key" "$value"
+        }
+        # shellcheck disable=SC2329
+        softwareupdate() {
+            [[ ${1:-} == --schedule && -n ${2:-} ]] || return 0
+            builtin printf 'swupdate\tschedule\tcheck\t%s\n' "$2"
+        }
+        # Every other command the script runs, read-only or not: no-op. Listed
+        # rather than discovered so a new side-effecting command added to the
+        # bootstrap script is a visible edit here, not a silent execution.
+        local stub
+        for stub in echo printf cat tee cp mv rm rmdir mkdir chmod chown sed \
+            launchctl killall fdesetup systemsetup dscl spctl csrutil \
+            open osascript touch sleep; do
+            eval "$stub() { return 0; }"
+        done
+        # shellcheck disable=SC1090
+        source "$script" 2>/dev/null
+    ) 2>/dev/null | awk -F'\t' '
+        { k = $1 FS $2 FS $3; if (!(k in row)) order[++n] = k; row[k] = $0 }
+        END { for (i = 1; i <= n; i++) print row[order[i]] }'
+    return "${PIPESTATUS[0]}"
+}
+
+# missing (no chezmoi / no script) and unsourceable both degrade the two
+# derived checks to skip — consistent with every other unreadable signal here.
+bootstrap_expectations=
+bootstrap_state=missing
+load_bootstrap_expectations() {
+    local script
+    bootstrap_expectations=
+    bootstrap_state=missing
+    if script=$(bootstrap_script_path); then
+        if bootstrap_expectations=$(parse_bootstrap_expectations "$script"); then
+            bootstrap_state=ok
+        else
+            bootstrap_state=unsourceable
+        fi
+    fi
+}
+
+# expectations <kind> — the rows of one kind, or nothing.
+expectations() {
+    [[ $bootstrap_state == ok ]] || return 0
+    printf '%s\n' "$bootstrap_expectations" | awk -F'\t' -v kind="$1" '$1 == kind'
+}
 
 # ------------------------------------------------------------------------------
-# Energy settings — the pmset values run_once_after_05-macos-sudo.sh sets.
-# Expected values are hardcoded to mirror executable_macos-sudo.sh (same
-# pattern as the auto-update toggles above). pmset drift is real and silent:
-# AC sleep was found drifted to 1 in Aug 2026 with nothing flagging it, after
-# the machine spent four days awake on the charger. `pmset -g custom` needs
-# no sudo.
+# Automatic-update toggles — the switches the bootstrap script sets. Distinct
+# from the pending-updates check below (which counts what's waiting): this
+# confirms the machine is still configured to fetch & install updates,
+# including ConfigDataInstall (XProtect / security-definition data). The
+# /Library/Preferences plist is world-readable, so no sudo is needed.
+#
+# The schedule toggle is intentionally NOT read from a defaults key: macOS 26
+# (Tahoe) no longer persists AutomaticCheckEnabled — the key vanishes even
+# while auto-check is on, giving a false negative. `softwareupdate --schedule`
+# is the authoritative, version-stable signal, which is also why the bootstrap
+# script sets it that way.
 # ------------------------------------------------------------------------------
-pm_custom=$(pmset -g custom 2>/dev/null)
-pm_get() {
-    printf '%s\n' "$pm_custom" | awk -v src="$1" -v key="$2" '
-        /^Battery Power:/ { sec = "Battery" }
-        /^AC Power:/ { sec = "AC" }
-        sec == src && $1 == key { print $2; exit }'
+check_auto_updates() {
+    local su_domain=/Library/Preferences/com.apple.SoftwareUpdate
+    local su_rows su_scope su_key su_want au_off=()
+    su_rows=$(expectations swupdate)
+    if [[ -z $su_rows ]]; then
+        check "Auto-update toggles" skip
+        return
+    fi
+    while IFS=$'\t' read -r _ su_scope su_key su_want; do
+        [[ -n $su_key ]] || continue
+        if [[ $su_scope == schedule ]]; then
+            softwareupdate --schedule 2>/dev/null | grep -qi "turned $su_want" || au_off+=("automatic-check")
+        else
+            [[ $(defaults read "$su_domain" "$su_key" 2>/dev/null) == "$su_want" ]] || au_off+=("$su_key")
+        fi
+    done <<<"$su_rows"
+    if ((${#au_off[@]} == 0)); then
+        check "Auto-update toggles" ok
+    else
+        check "Auto-update toggles" fail "disabled: ${au_off[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
+    fi
 }
-if [[ -z $pm_custom ]]; then
-    check "Energy settings (pmset)" skip
-else
-    pm_bad=()
-    for pm_src in Battery AC; do
-        for pm_pair in sleep=30 displaysleep=10 powernap=0; do
-            pm_key=${pm_pair%%=*}
-            pm_want=${pm_pair##*=}
-            pm_live=$(pm_get "$pm_src" "$pm_key")
-            [[ $pm_live == "$pm_want" ]] || pm_bad+=("$pm_src $pm_key=${pm_live:-unset} (want $pm_want)")
-        done
-    done
+
+# ------------------------------------------------------------------------------
+# Energy settings — the pmset values the bootstrap script sets.
+# `pmset -g custom` needs no sudo.
+# ------------------------------------------------------------------------------
+check_energy_settings() {
+    local pm_rows pm_custom pm_src pm_key pm_want pm_live pm_bad=()
+    pm_rows=$(expectations pmset)
+    pm_custom=$(pmset -g custom 2>/dev/null)
+    if [[ -z $pm_rows || -z $pm_custom ]]; then
+        check "Energy settings (pmset)" skip
+        return
+    fi
+    while IFS=$'\t' read -r _ pm_src pm_key pm_want; do
+        [[ -n $pm_key ]] || continue
+        pm_live=$(printf '%s\n' "$pm_custom" | awk -v src="$pm_src" -v key="$pm_key" '
+            /^Battery Power:/ { sec = "Battery" }
+            /^AC Power:/ { sec = "AC" }
+            sec == src && $1 == key { print $2; exit }')
+        [[ $pm_live == "$pm_want" ]] || pm_bad+=("$pm_src $pm_key=${pm_live:-unset} (want $pm_want)")
+    done <<<"$pm_rows"
     if ((${#pm_bad[@]} == 0)); then
         check "Energy settings (pmset)" ok
     else
         check "Energy settings (pmset)" fail "${pm_bad[*]} — re-run ~/.config/chezmoi/scripts/macos-sudo.sh"
     fi
-fi
+}
+
+load_bootstrap_expectations
+check_auto_updates
+check_energy_settings
 
 # ------------------------------------------------------------------------------
 # Pending macOS software updates. Cached 24h because softwareupdate -l is a
