@@ -90,7 +90,9 @@ cask "tor-browser"
 
 # Desktop Apps — Dev Tools
 cask "claude"
-cask "claude-code"
+# @latest channel: the stable channel lags weeks behind (2.1.236 vs 2.1.266,
+# blocking Fable 5.1); conflicts with the plain "claude-code" cask
+cask "claude-code@latest"
 cask "iterm2"
 cask "jetbrains-toolbox"
 cask "orbstack"
