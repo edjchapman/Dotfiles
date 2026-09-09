@@ -11,6 +11,8 @@
 #   (default)  Human report.
 #   --drift    Print each failing check explicitly.
 #   --quiet    TSV: "<ok>\t<failed>\t<skipped>".
+#              The audit protocol chezmoi-drift-check consumes — see
+#              docs/runbooks/recover-from-drift.md, "Audit protocol".
 #
 # Exit: 0 clean, 1 drift, 2 audit error.
 

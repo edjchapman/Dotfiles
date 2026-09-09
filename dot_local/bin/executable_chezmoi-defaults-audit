@@ -11,6 +11,8 @@
 #   --drift    Also list each drifted entry AND each unreadable entry (audit
 #              blind spots — typically system-protected paths).
 #   --quiet    TSV output for machine consumers: "<matched>\t<mismatched>\t<unreadable>".
+#              The audit protocol chezmoi-drift-check consumes — see
+#              docs/runbooks/recover-from-drift.md, "Audit protocol".
 #   --apply    Re-run the source defaults script (re-asserts everything).
 #
 # Exit: 0 clean, 1 drift, 2 audit error.

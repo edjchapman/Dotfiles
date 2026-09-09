@@ -293,34 +293,40 @@ if command -v brew >/dev/null 2>&1; then
     fi
 fi
 
-# macOS defaults drift — counts settings that diverged from the source script.
-# The audit is best-effort; if it fails entirely, record the error but don't
-# poison the other counts. Skipped silently when the audit tool isn't on PATH
-# (e.g., during early bootstrap before chezmoi apply has run).
-if command -v chezmoi-defaults-audit >/dev/null 2>&1; then
-    # The audit exits 1 when drift is detected — that's the expected outcome,
-    # not an error. Only treat empty/garbled output as a real error.
-    audit_out=$(chezmoi-defaults-audit --quiet 2>/dev/null) || true
-    if [[ -n $audit_out ]]; then
-        DEFAULTS_DRIFT=$(printf '%s' "$audit_out" | awk -F'\t' '{print $2}')
-        [[ $DEFAULTS_DRIFT =~ ^[0-9]+$ ]] || DEFAULTS_DRIFT=0
+# ------------------------------------------------------------------------------
+# Audit protocol — the one contract every audit helper honours, written down in
+# docs/runbooks/recover-from-drift.md ("Audit protocol") and enforced here:
+#   `<audit> --quiet` prints exactly one line, "<ok>\t<bad>\t<skip>" — three
+#   non-negative integers — and exits 0 clean / 1 drift / 2 error. Column 2 is
+#   the drift count, whatever that audit calls it. Exit 1 is the expected
+#   outcome when there is drift, not a failure.
+#
+# audit_drift_count <tool> <label> <var> — stores column 2 in <var>. Output
+# that is empty or not one well-formed line sets HAD_ERROR and names the audit
+# in err_parts, leaving <var> untouched (its default, 0): a broken protocol is
+# a broken signal, and reading a number out of garbage would report it as
+# trustworthy drift. Silently skipped when the tool isn't on PATH — early
+# bootstrap, before the helpers have been deployed.
+# ------------------------------------------------------------------------------
+audit_drift_count() {
+    local tool=$1 label=$2 var=$3 out bad
+    local shape=$'^[0-9]+\t[0-9]+\t[0-9]+$'
+    command -v "$tool" >/dev/null 2>&1 || return 0
+    out=$("$tool" --quiet 2>/dev/null) || true
+    if [[ $out =~ $shape ]]; then
+        IFS=$'\t' read -r _ bad _ <<<"$out"
+        printf -v "$var" '%s' "$bad"
     else
         HAD_ERROR=1
-        err_parts="${err_parts:+$err_parts; }defaults audit failed"
+        err_parts="${err_parts:+$err_parts; }$label audit failed"
     fi
-fi
+}
 
-# Security baseline drift — counts failing security checks.
-if command -v chezmoi-security-audit >/dev/null 2>&1; then
-    sec_out=$(chezmoi-security-audit --quiet 2>/dev/null) || true
-    if [[ -n $sec_out ]]; then
-        SECURITY_DRIFT=$(printf '%s' "$sec_out" | awk -F'\t' '{print $2}')
-        [[ $SECURITY_DRIFT =~ ^[0-9]+$ ]] || SECURITY_DRIFT=0
-    else
-        HAD_ERROR=1
-        err_parts="${err_parts:+$err_parts; }security audit failed"
-    fi
-fi
+# macOS defaults drift — settings that diverged from the source script.
+audit_drift_count chezmoi-defaults-audit defaults DEFAULTS_DRIFT
+
+# Security baseline drift — failing security checks.
+audit_drift_count chezmoi-security-audit security SECURITY_DRIFT
 
 # Daily brewup outcome. Presence of the marker means the last run failed;
 # brewup() removes it on the next success. Purely a file test — never shells
