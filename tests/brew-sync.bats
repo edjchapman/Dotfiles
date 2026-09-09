@@ -186,7 +186,24 @@ gate_setup() {
     command -v jq >/dev/null 2>&1 || skip "jq not available"
     SRCDIR="$TMPHOME/src"
     mkdir -p "$SRCDIR" "$TMPHOME/bin" "$XDG_CACHE_HOME/chezmoi-brew-inbox"
-    printf '# CLI Tools\nbrew "bat"\n' >"$SRCDIR/Brewfile.tmpl"
+    # Section 1 is CLI Tools (the abort test below answers "1"); the rest give
+    # the --plan tests a keyword-routed section, a mas section, and a section
+    # inside a machine_type conditional.
+    cat >"$SRCDIR/Brewfile.tmpl" <<'BREWFILE'
+# CLI Tools
+brew "bat"
+
+# Browsers
+cask "firefox"
+
+# Mac App Store
+mas "Xcode", id: 497799835
+
+{{ if eq .machine_type "personal" }}
+# Media & Social
+cask "spotify"
+{{ end }}
+BREWFILE
     git -C "$SRCDIR" init -q -b main
     git -C "$SRCDIR" config user.email test@example.com
     git -C "$SRCDIR" config user.name test
@@ -275,4 +292,98 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" == *"uncommitted changes"* ]]
     [ -s "$JOURNAL" ] # journal preserved
+}
+
+# ------------------------------------------------------------------------------
+# --plan — the non-interactive seam over collapse → classify → suggest. Each
+# test runs the script with no TTY seam and no controlling terminal, captures
+# stdout and stderr separately (plan rows are the stdout contract; skips and
+# notes go to stderr), and asserts the read-only guarantees.
+# ------------------------------------------------------------------------------
+
+# plan <journal-lines...> — write the journal, run --plan, load $plan_out /
+# $plan_err / $plan_rc, and assert the read-only invariants every plan shares.
+plan() {
+    printf '%s\n' "$@" >"$JOURNAL"
+    cp "$SRCDIR/Brewfile.tmpl" "$TMPHOME/brewfile.before"
+    cp "$JOURNAL" "$TMPHOME/journal.before"
+    unset CHEZMOI_BREW_SYNC_TTY
+    plan_rc=0
+    "$SYNC" --plan >"$TMPHOME/plan.out" 2>"$TMPHOME/plan.err" </dev/null || plan_rc=$?
+    plan_out=$(cat "$TMPHOME/plan.out")
+    plan_err=$(cat "$TMPHOME/plan.err")
+    cmp -s "$SRCDIR/Brewfile.tmpl" "$TMPHOME/brewfile.before"
+    cmp -s "$JOURNAL" "$TMPHOME/journal.before"
+    [[ ! -e "$XDG_CACHE_HOME/chezmoi-brew-inbox/.sync.lock" ]]
+}
+
+ev() { printf '{"ts":%s,"op":"%s","kind":"%s","name":"%s","args":[],"rc":0}' "$1" "$2" "$3" "$4"; }
+
+@test "--plan prints one TSV row per action and exits 0 with no TTY" {
+    gate_setup
+    plan "$(ev 1 install brew ripgrep)"
+    [ "$plan_rc" -eq 0 ]
+    [[ "$plan_out" == $'add\tbrew\tripgrep\tCLI Tools\t0' ]]
+}
+
+@test "--plan ignores the git-cleanliness gate" {
+    gate_setup
+    echo 'brew "extra"' >>"$SRCDIR/Brewfile.tmpl"
+    plan "$(ev 1 install brew ripgrep)"
+    [ "$plan_rc" -eq 0 ]
+    [[ "$plan_out" == $'add\tbrew\tripgrep\tCLI Tools\t0' ]]
+}
+
+@test "--plan collapses an install followed by an uninstall to nothing" {
+    gate_setup
+    plan "$(ev 1 install brew ripgrep)" "$(ev 2 uninstall brew ripgrep)"
+    [ "$plan_rc" -eq 0 ]
+    [[ -z "$plan_out" ]]
+    [[ "$plan_err" == *"no net changes"* ]]
+}
+
+@test "--plan emits no row for an install already in the Brewfile" {
+    gate_setup
+    plan "$(ev 1 install brew bat)"
+    [ "$plan_rc" -eq 0 ]
+    [[ -z "$plan_out" ]]
+    [[ "$plan_err" == *'brew "bat" — already in Brewfile.tmpl'* ]]
+}
+
+@test "--plan routes a keyword-matched cask to its section" {
+    gate_setup
+    plan "$(ev 1 install cask brave-browser)"
+    [[ "$plan_out" == $'add\tcask\tbrave-browser\tBrowsers\t0' ]]
+}
+
+@test "--plan flags a package routed into a conditional section" {
+    gate_setup
+    plan "$(ev 1 install cask discord)"
+    [[ "$plan_out" == $'add\tcask\tdiscord\tMedia & Social\t1' ]]
+}
+
+@test "--plan reports a mas install by numeric id" {
+    gate_setup
+    plan "$(ev 1 install mas 123456)"
+    [[ "$plan_out" == $'add\tmas\t123456\tMac App Store\t0' ]]
+}
+
+@test "--plan reports a remove with empty section columns" {
+    gate_setup
+    plan "$(ev 1 uninstall brew bat)"
+    [[ "$plan_out" == $'remove\tbrew\tbat\t\t0' ]]
+}
+
+@test "--plan skips events on stderr, never stdout" {
+    gate_setup
+    plan "$(ev 1 install brew bat)" "$(ev 2 install brew ripgrep)"
+    [[ "$plan_out" == $'add\tbrew\tripgrep\tCLI Tools\t0' ]]
+    [[ "$plan_err" == *"skipped: brew \"bat\""* ]]
+}
+
+@test "--plan and --dry-run together exit 2" {
+    gate_setup
+    run "$SYNC" --plan --dry-run
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"mutually exclusive"* ]]
 }
