@@ -114,6 +114,19 @@ Three further fields are *derived* by `chezmoi-drift-check` from the ones above 
 
 `banner` and `drift_total` are optional to readers: a state file written before they existed can survive the 4h TTL, and every consumer falls back to composing from the raw fields when they are absent.
 
+### Audit protocol
+
+`DEFAULTS_DRIFT` and `SECURITY_DRIFT` come from `chezmoi-defaults-audit` and `chezmoi-security-audit`. Both honour one contract, and `chezmoi-drift-check` consumes both through a single function (`audit_drift_count`), which is the contract's only enforcement point:
+
+| Invocation | `<audit> --quiet` |
+|---|---|
+| stdout | Exactly one line: `<ok>\t<bad>\t<skip>` — three non-negative integers, tab-separated. **Column 2 is the drift count**, whatever the audit calls it (`mismatched`, `failed`). |
+| Exit code | `0` clean · `1` drift found · `2` the audit itself could not run. Exit 1 is the expected outcome when there is drift, not an error. |
+| Anything else | Empty output, a malformed line, or more than one line is treated as an audit failure: `HAD_ERROR=1`, the audit is named in `summary`, and its count stays at 0 rather than being read out of garbage. |
+| Not on PATH | Skipped silently (early bootstrap); count stays at 0, no error. |
+
+A third audit adds one `audit_drift_count <tool> <label> <VAR>` call and one state-file field; it cannot return its count in the wrong column without failing the shape check.
+
 ## Diagnose a specific file
 
 ```bash

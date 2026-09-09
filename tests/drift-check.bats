@@ -616,3 +616,86 @@ EOF
     run bash -c "sed -n '/^brewup()/,/^}/p' '$ZSHRC' | grep -c 'command brew cleanup'"
     [ "$output" = "1" ]
 }
+
+# ------------------------------------------------------------------------------
+# Audit protocol — `<audit> --quiet` prints one "<ok>\t<bad>\t<skip>" line and
+# exits 0/1/2; drift is column 2. Both audits reach the state file through
+# audit_drift_count, so these drive the real script with a stubbed audit and
+# read what it wrote. See docs/runbooks/recover-from-drift.md, "Audit
+# protocol".
+# ------------------------------------------------------------------------------
+
+# stub_audit <tool> <body> — replace one audit stub with a shell body.
+stub_audit() {
+    printf '#!/bin/sh\n%s\n' "$2" >"$TMPHOME/bin/$1"
+    chmod +x "$TMPHOME/bin/$1"
+}
+
+@test "audit protocol: both audits are read through column 2" {
+    make_stubs
+    stub_audit chezmoi-defaults-audit 'printf "3\t2\t1\n"'
+    stub_audit chezmoi-security-audit 'printf "5\t4\t0\n"; exit 1'
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$DEFAULTS_DRIFT" -eq 2 ]
+    [ "$SECURITY_DRIFT" -eq 4 ]
+    [ "$HAD_ERROR" -eq 0 ]
+}
+
+@test "audit protocol: exit 1 with a well-formed line is drift, not an error" {
+    make_stubs
+    stub_audit chezmoi-defaults-audit 'printf "0\t7\t0\n"; exit 1'
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$DEFAULTS_DRIFT" -eq 7 ]
+    [ "$HAD_ERROR" -eq 0 ]
+    [[ "$summary" != *"audit failed"* ]]
+}
+
+@test "audit protocol: empty output is an error that names the audit" {
+    make_stubs
+    stub_audit chezmoi-security-audit 'exit 2'
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 1 ]
+    [ "$SECURITY_DRIFT" -eq 0 ]
+    [[ "$summary" == *"security audit failed"* ]]
+    # The other audit is unaffected.
+    [ "$DEFAULTS_DRIFT" -eq 2 ]
+}
+
+@test "audit protocol: garbled output is an error, not a silent zero" {
+    # A number-shaped fragment inside garbage must not be read as drift.
+    make_stubs
+    stub_audit chezmoi-defaults-audit 'printf "Error: 5 things\t2\n"'
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 1 ]
+    [ "$DEFAULTS_DRIFT" -eq 0 ]
+    [[ "$summary" == *"defaults audit failed"* ]]
+}
+
+@test "audit protocol: more than one line is an error" {
+    make_stubs
+    stub_audit chezmoi-defaults-audit 'printf "3\t2\t1\nextra\n"'
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 1 ]
+    [ "$DEFAULTS_DRIFT" -eq 0 ]
+}
+
+@test "audit protocol: an audit missing from PATH is skipped, not an error" {
+    make_stubs
+    /bin/rm -f "$TMPHOME/bin/chezmoi-security-audit"
+    run "$DRIFT_CHECK" --full --quiet
+    # shellcheck disable=SC1090
+    . "$STATE"
+    [ "$HAD_ERROR" -eq 0 ]
+    [ "$SECURITY_DRIFT" -eq 0 ]
+    [ "$DEFAULTS_DRIFT" -eq 2 ]
+}
