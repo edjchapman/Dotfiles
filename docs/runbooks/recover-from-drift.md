@@ -12,6 +12,8 @@ mac
 
 `mac` is an alias for `chezmoi-fix`. It refreshes the drift cache, summarises pending work across all signals (home-file drift, brew-bundle drift, brew-inbox journal, macOS defaults, security baseline), and dispatches to the right tool. Read the rest of this runbook only when `mac` reports an error, or you want to understand a specific signal in depth.
 
+`mac --menu` prints the menu `mac` would offer from the cached drift state and exits — no refresh, no TTY, no action — for a quick look at what is pending without entering the prompt.
+
 ## Common manual cleanups
 
 `mac` covers the automated paths. A few drift sources need to be cleaned up by hand:
