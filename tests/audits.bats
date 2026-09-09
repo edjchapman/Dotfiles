@@ -33,7 +33,8 @@ setup() {
 }
 
 teardown() {
-    rm -rf "$WORKDIR"
+    # Absolute: the derived tests below put a sentinel `rm` first on PATH.
+    /bin/rm -rf "$WORKDIR"
 }
 
 # Run normalize_bool under a specific bash binary. The value under test is
@@ -174,4 +175,251 @@ v=${1,,}
     run bash "$WORKDIR/pending.bash" "$WORKDIR/su-cache"
     [ "$status" -eq 0 ]
     [ "$output" = "0" ]
+}
+
+# ------------------------------------------------------------------------------
+# Bootstrap-derived expectations (pmset + SoftwareUpdate toggles). The
+# functions are extracted by name from chezmoi-security-audit and driven
+# against a synthetic bootstrap script, with pmset / defaults / softwareupdate
+# / chezmoi stubbed on PATH so the live side is whatever the test says it is
+# and nothing on the real machine is read or written.
+#
+# Runs under the PATH's bash — /bin/bash 3.2 locally, so the extractor gets
+# the same bootstrap-window coverage as normalize_bool above.
+# ------------------------------------------------------------------------------
+
+derived_setup() {
+    local fn
+    grep -E '^BOOTSTRAP_REL=' "$SECURITY_AUDIT" >"$WORKDIR/derived.bash"
+    grep -q 'BOOTSTRAP_REL=' "$WORKDIR/derived.bash"
+    for fn in check bootstrap_script_path parse_bootstrap_expectations \
+        load_bootstrap_expectations expectations check_auto_updates \
+        check_energy_settings; do
+        sed -n "/^$fn()/,/^}/p" "$SECURITY_AUDIT" >>"$WORKDIR/derived.bash"
+        grep -q "^$fn()" "$WORKDIR/derived.bash"
+    done
+
+    SRCDIR="$WORKDIR/src"
+    BOOTSTRAP="$SRCDIR/dot_config/chezmoi/scripts/executable_macos-sudo.sh"
+    mkdir -p "$(dirname "$BOOTSTRAP")" "$WORKDIR/bin" "$WORKDIR/defaults"
+
+    cat >"$WORKDIR/bin/chezmoi" <<EOF
+#!/bin/sh
+[ "\$1" = "source-path" ] && printf '%s\n' "$SRCDIR"
+exit 0
+EOF
+    # Live-side stubs read their answers from files the test controls.
+    cat >"$WORKDIR/bin/pmset" <<EOF
+#!/bin/sh
+[ "\$1" = "-g" ] && cat "$WORKDIR/pmset.out"
+exit 0
+EOF
+    cat >"$WORKDIR/bin/defaults" <<EOF
+#!/bin/sh
+[ "\$1" = "read" ] || exit 0
+[ -f "$WORKDIR/defaults/\$3" ] || exit 1
+cat "$WORKDIR/defaults/\$3"
+EOF
+    cat >"$WORKDIR/bin/softwareupdate" <<EOF
+#!/bin/sh
+[ "\$1" = "--schedule" ] && cat "$WORKDIR/schedule.out"
+exit 0
+EOF
+    # Sentinels: if the extractor ever lets one of these reach PATH, the file
+    # it drops fails the side-effect test below.
+    for tool in rm launchctl fdesetup; do
+        printf '#!/bin/sh\ntouch "%s/executed-%s"\nexit 0\n' "$WORKDIR" "$tool" \
+            >"$WORKDIR/bin/$tool"
+    done
+    chmod +x "$WORKDIR"/bin/*
+    export PATH="$WORKDIR/bin:/usr/bin:/bin"
+
+    live_matches_bootstrap
+    write_bootstrap
+}
+
+# The live side that matches write_bootstrap's defaults exactly.
+live_matches_bootstrap() {
+    cat >"$WORKDIR/pmset.out" <<'EOF'
+Battery Power:
+ sleep                30
+ displaysleep         10
+ powernap             0
+AC Power:
+ sleep                30
+ displaysleep         10
+ powernap             0
+EOF
+    printf 'Automatic checking for updates is turned on.\n' >"$WORKDIR/schedule.out"
+    for key in AutomaticDownload ConfigDataInstall; do
+        printf '1\n' >"$WORKDIR/defaults/$key"
+    done
+}
+
+# write_bootstrap [extra lines...] — a synthetic bootstrap script with the
+# same shape as the real one: banner echo, `sudo -v` gate that exits 0 on
+# failure, pmset/softwareupdate/defaults assertions, plus side-effecting
+# commands the extractor must neutralise. Extra lines are appended verbatim.
+write_bootstrap() {
+    {
+        cat <<'EOF'
+#!/bin/bash
+set -euo pipefail
+echo "banner"
+if ! sudo -v; then
+    echo "no password"
+    exit 0
+fi
+sudo pmset -a displaysleep 10
+sudo pmset -b sleep 30
+sudo pmset -c sleep 30
+sudo pmset -a powernap 0
+sudo softwareupdate --schedule on
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true
+sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true
+sudo defaults write /Library/Preferences/com.apple.loginwindow GuestEnabled -bool false
+if fdesetup status | grep -q "FileVault is On"; then echo on; fi
+launchctl bootout "gui/$(id -u)" /nonexistent 2>/dev/null || true
+sudo rm -rf /Library/Google/GoogleSoftwareUpdate
+rm -rf "$HOME/Library/Google/GoogleSoftwareUpdate"
+EOF
+        printf '%s\n' "$@"
+    } >"$BOOTSTRAP"
+}
+
+# Load expectations and run both derived checks; print counts, the failure
+# lines, and the load state.
+run_derived() {
+    run bash -c '
+        set -uo pipefail
+        OK=0 FAIL=0 SKIP=0 FAILED=()
+        source "$1"
+        load_bootstrap_expectations
+        check_auto_updates
+        check_energy_settings
+        printf "%s\t%s\t%s\n" "$OK" "$FAIL" "$SKIP"
+        printf "%s\n" "${FAILED[@]:-}"
+        printf "state=%s\n" "$bootstrap_state"
+    ' _ "$WORKDIR/derived.bash"
+}
+
+@test "derived: a live machine matching the bootstrap script passes both checks" {
+    derived_setup
+    run_derived
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == $'2\t0\t0' ]]
+    [[ "$output" == *"state=ok"* ]]
+}
+
+@test "derived: the extractor captures every assertion, scope-expanded" {
+    derived_setup
+    run bash -c 'source "$1"; load_bootstrap_expectations; expectations pmset; expectations swupdate' _ "$WORKDIR/derived.bash"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 9 ]
+    [[ "$output" == *$'pmset\tBattery\tdisplaysleep\t10'* ]]
+    [[ "$output" == *$'pmset\tAC\tdisplaysleep\t10'* ]]
+    [[ "$output" == *$'pmset\tBattery\tsleep\t30'* ]]
+    [[ "$output" == *$'pmset\tAC\tpowernap\t0'* ]]
+    [[ "$output" == *$'swupdate\tschedule\tcheck\ton'* ]]
+    [[ "$output" == *$'swupdate\tdefaults\tConfigDataInstall\t1'* ]]
+    # The loginwindow write is not a SoftwareUpdate toggle.
+    [[ "$output" != *GuestEnabled* ]]
+}
+
+@test "derived: drifted AC sleep fails the energy check and names the setting" {
+    derived_setup
+    sed -i.bak '/^AC Power:/,$ s/^ sleep .*/ sleep                1/' "$WORKDIR/pmset.out"
+    run_derived
+    [[ "${lines[0]}" == $'1\t1\t0' ]]
+    [[ "$output" == *"AC sleep=1 (want 30)"* ]]
+    [[ "$output" != *"Battery sleep"* ]]
+}
+
+@test "derived: editing the bootstrap script changes what the audit expects" {
+    # The locality test: no audit edit, a bootstrap edit, and the audit now
+    # wants the new value.
+    derived_setup
+    sed -i.bak 's/pmset -a displaysleep 10/pmset -a displaysleep 15/' "$BOOTSTRAP"
+    run_derived
+    [[ "${lines[0]}" == $'1\t1\t0' ]]
+    [[ "$output" == *"Battery displaysleep=10 (want 15)"* ]]
+    [[ "$output" == *"AC displaysleep=10 (want 15)"* ]]
+}
+
+@test "derived: a later pmset write for the same scope and key wins" {
+    derived_setup
+    write_bootstrap 'sudo pmset -c displaysleep 20'
+    run_derived
+    [[ "$output" == *"AC displaysleep=10 (want 20)"* ]]
+    [[ "$output" != *"Battery displaysleep"* ]]
+}
+
+@test "derived: a disabled schedule or missing key fails the auto-update check" {
+    derived_setup
+    printf 'Automatic checking for updates is turned off.\n' >"$WORKDIR/schedule.out"
+    /bin/rm -f "$WORKDIR/defaults/ConfigDataInstall"
+    run_derived
+    [[ "${lines[0]}" == $'1\t1\t0' ]]
+    [[ "$output" == *"disabled: automatic-check ConfigDataInstall"* ]]
+}
+
+@test "derived: a missing bootstrap script skips both checks, not fails" {
+    derived_setup
+    /bin/rm -f "$BOOTSTRAP"
+    run_derived
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == $'0\t0\t2' ]]
+    [[ "$output" == *"state=missing"* ]]
+}
+
+@test "derived: no chezmoi on PATH skips both checks, not fails" {
+    derived_setup
+    /bin/rm -f "$WORKDIR/bin/chezmoi"
+    run_derived
+    [[ "${lines[0]}" == $'0\t0\t2' ]]
+    [[ "$output" == *"state=missing"* ]]
+}
+
+@test "derived: an unsourceable bootstrap script skips both checks, not fails" {
+    derived_setup
+    printf '#!/bin/bash\nset -euo pipefail\nsudo pmset -a sleep 30\nif [[ broken\n' >"$BOOTSTRAP"
+    run_derived
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == $'0\t0\t2' ]]
+    [[ "$output" == *"state=unsourceable"* ]]
+}
+
+@test "derived: a bootstrap script with no pmset lines skips only the energy check" {
+    derived_setup
+    sed -i.bak '/pmset/d' "$BOOTSTRAP"
+    run_derived
+    [[ "${lines[0]}" == $'1\t0\t1' ]]
+}
+
+@test "derived: sourcing the bootstrap script executes nothing on PATH" {
+    derived_setup
+    run_derived
+    [ "$status" -eq 0 ]
+    [[ ! -e "$WORKDIR/executed-rm" ]]
+    [[ ! -e "$WORKDIR/executed-launchctl" ]]
+    [[ ! -e "$WORKDIR/executed-fdesetup" ]]
+    # And the sentinels are live, so a stub gap would have been caught.
+    [[ -x "$WORKDIR/bin/rm" ]]
+}
+
+@test "derived: a bootstrap script whose sudo -v gate exits early yields no expectations" {
+    # Guards the truncation trap: the real script exits 0 when `sudo -v`
+    # fails. The extractor's sudo stub must answer -v with success, or every
+    # expectation after the gate is silently lost. Prove the gate is real by
+    # running the synthetic script with a failing sudo and no extractor.
+    derived_setup
+    printf '#!/bin/sh\nexit 1\n' >"$WORKDIR/bin/sudo"
+    chmod +x "$WORKDIR/bin/sudo"
+    run bash "$BOOTSTRAP"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"no password"* ]]
+    /bin/rm -f "$WORKDIR/bin/sudo"
+    # And through the extractor the same script yields the full set.
+    run bash -c 'source "$1"; load_bootstrap_expectations; expectations pmset | wc -l' _ "$WORKDIR/derived.bash"
+    [ "$(printf '%s' "$output" | tr -d ' ')" = "6" ]
 }
