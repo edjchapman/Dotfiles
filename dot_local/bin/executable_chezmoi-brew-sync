@@ -8,18 +8,32 @@
 #
 # Refuses to run while Brewfile.tmpl has uncommitted changes (pass --force to
 # stash first — never auto-pops). Mutex via mkdir (no flock on base macOS).
+#
+# `--plan` is the read-only seam over the same pipeline: journal collapse,
+# Brewfile classification, section suggestion — printed as TSV, no prompts.
 
 set -uo pipefail
 
 FORCE=0
 DRY_RUN=0
+PLAN_MODE=0
 
 usage() {
     cat <<'EOF'
 chezmoi-brew-sync [--force] [--dry-run] [-h]
+chezmoi-brew-sync --plan
 
   --force    Stash Brewfile.tmpl changes before merging (never auto-pops).
   --dry-run  Show what would change; do not edit, validate, or truncate.
+             Still runs the full interactive flow (needs a TTY).
+  --plan     Non-interactive: print one tab-separated line per action the
+             interactive flow would offer, then exit 0 (also when empty):
+               <op>\t<kind>\t<name>\t<suggested-section>\t<in-conditional>
+             op is add|remove; for remove the last two columns are empty and
+             0; for mas the name is the numeric app id. Reads the journal and
+             Brewfile.tmpl only: no prompts, no lock, no git gate, no writes.
+             Skipped events are reported on stderr. Not combinable with
+             --dry-run.
 
 Reads the brew-inbox journal, prompts you for each pending event, and applies
 reviewed edits to Brewfile.tmpl. Aborts if Brewfile.tmpl has uncommitted
@@ -31,6 +45,7 @@ for arg in "$@"; do
     case "$arg" in
         --force) FORCE=1 ;;
         --dry-run) DRY_RUN=1 ;;
+        --plan) PLAN_MODE=1 ;;
         -h | --help)
             usage
             exit 0
@@ -42,6 +57,16 @@ for arg in "$@"; do
             ;;
     esac
 done
+if ((PLAN_MODE && DRY_RUN)); then
+    echo "chezmoi-brew-sync: --plan and --dry-run are mutually exclusive" >&2
+    exit 2
+fi
+
+# Diagnostics that the interactive flow prints on stdout go to stderr under
+# --plan, so stdout carries nothing but plan rows.
+note() {
+    if ((PLAN_MODE)); then echo "$@" >&2; else echo "$@"; fi
+}
 
 die() {
     echo "chezmoi-brew-sync: $*" >&2
@@ -60,18 +85,22 @@ JOURNAL="$CACHE_DIR/journal.ndjson"
 LOCK="$CACHE_DIR/.sync.lock"
 
 if [[ ! -s $JOURNAL ]]; then
-    echo "chezmoi-brew-sync: journal empty — nothing to do"
+    note "chezmoi-brew-sync: journal empty — nothing to do"
     exit 0
 fi
 
 # ------------------------------------------------------------------------------
 # Mutex via mkdir. mkdir on an existing directory fails atomically, no race.
+# --plan is read-only, so it neither takes the lock nor waits on it: a plan
+# printed while a sync is mid-flight is stale, not dangerous.
 # ------------------------------------------------------------------------------
-mkdir -p "$CACHE_DIR"
-if ! mkdir "$LOCK" 2>/dev/null; then
-    die "another chezmoi-brew-sync is running (lock: $LOCK)"
+if ((PLAN_MODE == 0)); then
+    mkdir -p "$CACHE_DIR"
+    if ! mkdir "$LOCK" 2>/dev/null; then
+        die "another chezmoi-brew-sync is running (lock: $LOCK)"
+    fi
+    trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
 fi
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
 
 # ------------------------------------------------------------------------------
 # Git cleanliness gate. We never silently merge into a dirty Brewfile.tmpl —
@@ -91,7 +120,11 @@ trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM HUP
 # `-u` has no committed baseline to restore, so it deletes the file outright
 # instead of merging into it. Don't add `-u` as a quick fix; if this path
 # becomes reachable, it needs its own recovery story, not a stash flag.
-if dirty=$(git -C "$SRC" status --porcelain -- Brewfile.tmpl 2>/dev/null) && [[ -z $dirty ]]; then
+# The gate protects writes; --plan makes none, so a dirty Brewfile.tmpl is
+# planned against as-is rather than refused.
+if ((PLAN_MODE)); then
+    :
+elif dirty=$(git -C "$SRC" status --porcelain -- Brewfile.tmpl 2>/dev/null) && [[ -z $dirty ]]; then
     :
 else
     if ((FORCE)); then
@@ -117,8 +150,8 @@ final_state=$(jq -rs '
 ' "$JOURNAL")
 
 if [[ -z $final_state ]]; then
-    echo "chezmoi-brew-sync: journal had only redundant/cancelled events"
-    ((DRY_RUN)) || : >"$JOURNAL"
+    note "chezmoi-brew-sync: journal had only redundant/cancelled events"
+    ((DRY_RUN || PLAN_MODE)) || : >"$JOURNAL"
     exit 0
 fi
 
@@ -163,9 +196,9 @@ while IFS=$'\t' read -r ev_op ev_kind ev_name ev_args; do
 done <<<"$final_state"
 
 if ((${#ACTIONS[@]} == 0)); then
-    echo "chezmoi-brew-sync: no net changes after dedup."
-    for s in "${SKIPPED[@]:-}"; do [[ -n $s ]] && echo "  - $s"; done
-    ((DRY_RUN)) || : >"$JOURNAL"
+    note "chezmoi-brew-sync: no net changes after dedup."
+    for s in "${SKIPPED[@]:-}"; do [[ -n $s ]] && note "  - $s"; done
+    ((DRY_RUN || PLAN_MODE)) || : >"$JOURNAL"
     exit 0
 fi
 
@@ -335,6 +368,25 @@ format_line() {
         *) printf '# unknown kind %s: %s' "$kind" "$name" ;;
     esac
 }
+
+# ------------------------------------------------------------------------------
+# --plan: report the defaults the interactive loop would offer, one TSV row per
+# action, and stop. Nothing below this point runs in plan mode.
+# ------------------------------------------------------------------------------
+if ((PLAN_MODE)); then
+    for s in "${SKIPPED[@]:-}"; do [[ -n $s ]] && note "skipped: $s"; done
+    for action in "${ACTIONS[@]}"; do
+        IFS=$'\t' read -r op kind name _ <<<"$action"
+        if [[ $op == remove ]]; then
+            printf '%s\t%s\t%s\t\t0\n' "$op" "$kind" "$name"
+            continue
+        fi
+        suggested=$(suggest_section_index "$kind" "$name")
+        printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$kind" "$name" \
+            "${SECTION_NAMES[$((suggested - 1))]}" "${SECTION_COND[$((suggested - 1))]}"
+    done
+    exit 0
+fi
 
 # ------------------------------------------------------------------------------
 # Interactive loop.

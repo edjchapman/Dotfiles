@@ -7,6 +7,7 @@
 #
 # Designed to be the target of the shell banner. Banner says "drift detected →
 # run chezmoi-fix"; user types `chezmoi-fix` and walks a numbered menu.
+# `--menu` renders that menu from the cached state and exits (see usage).
 
 set -uo pipefail
 
@@ -60,6 +61,21 @@ brewup_failed_notice() {
     echo "   under the most recent '=== brewup' header. Re-run with 'brewup'."
 }
 
+usage() {
+    cat <<'EOF'
+chezmoi-fix [--menu] [-h]
+
+Interactive entry point for remediating detected drift (aliased as `mac`).
+Refreshes the drift cache, summarises pending work, and offers a numbered
+menu of remediation actions.
+
+  --menu   Print the menu chezmoi-fix would offer, then exit 0. Reads the
+           cached drift state only: no cache refresh, no TTY, no chezmoi
+           required, no action taken.
+  -h       Show this help.
+EOF
+}
+
 # Test hook: `chezmoi-fix --is-tap <name>` exits 0 if <name> is a bare tap, 1
 # otherwise — lets bats-core verify tap detection without the interactive flow.
 if [[ ${1:-} == --is-tap ]]; then
@@ -67,12 +83,25 @@ if [[ ${1:-} == --is-tap ]]; then
     exit $?
 fi
 
-# Test hook: when set, skip the runtime prerequisites (chezmoi, TTY, drift-check
-# refresh) and exit after rendering the menu. Lets bats-core exercise menu
-# logic against synthetic state files without a real chezmoi install.
-TEST_MODE=${CHEZMOI_FIX_TEST_MODE:-0}
+# --menu is the render-only mode: the same header and option list the
+# interactive flow shows, computed from the cached state, then exit. One
+# rendering path serves both; the flag only decides whether to stop after it.
+MENU=0
+for arg in "$@"; do
+    case "$arg" in
+        --menu) MENU=1 ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
 
-if ((TEST_MODE == 0)); then
+if ((MENU == 0)); then
     command -v chezmoi >/dev/null 2>&1 || die "chezmoi not installed"
 fi
 
@@ -80,7 +109,7 @@ fi
 # fifo to feed menu choices and reach the dispatch layer); unset in normal use,
 # so the default keeps live behaviour identical.
 TTY=${CHEZMOI_FIX_TTY:-/dev/tty}
-if ((TEST_MODE == 0)); then
+if ((MENU == 0)); then
     [[ -r $TTY && -w $TTY ]] || die "no tty available; chezmoi-fix is interactive"
 fi
 
@@ -124,7 +153,7 @@ fi
 # Refresh drift counts up-front (quiet — we render our own summary). If the
 # refresh fails (e.g. broken Brewfile.tmpl), fall through to whatever cached
 # state is on disk; the menu will still surface the brew-inbox option.
-if ((TEST_MODE == 0)); then
+if ((MENU == 0)); then
     echo "==> Refreshing drift signals…"
     if command -v chezmoi-drift-check >/dev/null 2>&1; then
         chezmoi-drift-check --full --quiet >/dev/null 2>&1 || true
@@ -253,7 +282,7 @@ done
 echo "  q) Quit"
 echo
 
-((TEST_MODE > 0)) && exit 0
+((MENU > 0)) && exit 0
 
 read -r -p "Choice [q]: " reply <"$TTY"
 reply=${reply:-q}
