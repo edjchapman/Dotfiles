@@ -19,16 +19,16 @@ echo "Applying macOS defaults..."
 # Auto-hide the Dock
 defaults write com.apple.dock autohide -bool true
 
-# Set Dock icon size. 34, not the macOS stock 48 — adopted from the live
-# machine, where it had been set by hand (dragging the Dock divider) and was
-# showing as drift against this script on every audit run.
-defaults write com.apple.dock tilesize -int 34
+# Set Dock icon size. Adopted from the live machine, where it is set by hand
+# (dragging the Dock divider); the script tracks whatever the hand-set value
+# is rather than fighting it. 51 since 2026-09 (was 34, before that stock 48).
+defaults write com.apple.dock tilesize -int 51
 
-# Don't show recent apps in Dock
-defaults write com.apple.dock show-recents -bool false
+# Show recent apps in Dock (flipped on by hand 2026-09; adopted)
+defaults write com.apple.dock show-recents -bool true
 
-# Don't auto-rearrange Spaces based on most recent use
-defaults write com.apple.dock mru-spaces -bool false
+# Auto-rearrange Spaces based on most recent use (flipped on by hand 2026-09; adopted)
+defaults write com.apple.dock mru-spaces -bool true
 
 # Hot corners: bottom-right = Quick Note (14)
 # (other corners left unset — configure in System Settings if wanted)
