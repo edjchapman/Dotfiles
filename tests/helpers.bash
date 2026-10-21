@@ -36,21 +36,32 @@
 # byte-at-a-time, so each prompt takes exactly the next line — provided a
 # writer keeps the write end open, or the buffered data is discarded the
 # moment the reader closes between prompts. Hence the background holder: it
-# writes all answers up front, then sleeps. The sleep also bounds any
-# deadlock — if the script asks for more answers than were scripted, the
-# holder's exit closes the write end after 10s and every later read gets EOF
-# (i.e. the prompt's default) instead of hanging the suite.
+# writes all answers up front, then holds the write end for 60s — a window
+# for the whole run, not per prompt, so it must cover a slow machine.
+#
+# The holder must never simply exit: opening a fifo for reading with no
+# writer blocks forever rather than returning EOF, so the next prompt after
+# the exit would hang the suite (it did, under load, with the old 10s hold).
+# After the hold it loops opening and closing the write end instead. Each
+# open completes a pending reader's open and each close hands it EOF, so a
+# script that asks for more answers than were scripted takes the prompt's
+# default instead of hanging.
 #
 # Callers must kill $FEED_TTY_PID in teardown (fd 3 is closed here so the
-# holder can never hang bats itself, but there's no point leaving it around).
+# holder can never hang bats itself, and the EOF loop never ends on its own).
 feed_tty() {
     local fifo=$1
     shift
     mkfifo "$fifo"
     {
-        printf '%s\n' "$@"
-        sleep 10
-    } >"$fifo" 2>/dev/null 3>&- &
+        {
+            printf '%s\n' "$@"
+            # sleep's stdout is detached from the fifo so that killing the
+            # holder releases the write end at once, not when sleep finishes.
+            sleep 60 >/dev/null
+        } >"$fifo"
+        while :; do : >"$fifo"; done
+    } 2>/dev/null 3>&- &
     # shellcheck disable=SC2034  # consumed by the callers' teardowns (cross-file)
     FEED_TTY_PID=$!
 }
