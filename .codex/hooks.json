@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/ed/.local/share/chezmoi/.codex/hooks/guard-destructive.sh'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/ed/.local/share/chezmoi/.codex/hooks/post-edit-lint.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}

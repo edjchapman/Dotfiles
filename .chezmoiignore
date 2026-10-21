@@ -22,8 +22,10 @@ CONTEXT.md
 # the entry matches nothing and ~/Brewfile gets deployed.
 Brewfile
 
-# Agentic scaffolding (project-scoped Claude Code config — not for $HOME)
+# Agentic scaffolding (project-scoped Claude Code / Codex config — not for $HOME)
 .claude
+.codex
+.agents
 
 # Linter/formatter configs that apply to this repo only.
 # NOTE: .editorconfig is intentionally absent — a dot_editorconfig source deploys
