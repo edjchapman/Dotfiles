@@ -8,7 +8,7 @@ set -euo pipefail
 
 echo ""
 echo "============================================================"
-echo " macOS sudo settings (firewall, Touch ID, energy, updates)"
+echo " macOS sudo settings (firewall, Touch ID, energy, updates, AWDL)"
 echo " This requires your password. Press Ctrl-C to skip."
 echo "============================================================"
 echo ""
@@ -159,6 +159,62 @@ rm -rf "$HOME/Library/Google/GoogleSoftwareUpdate"
 echo "Chrome: Keystone removed — Homebrew owns the version from here."
 
 # =============================================================================
+# Wi-Fi — keep AWDL down
+# =============================================================================
+
+# AWDL (awdl0) is the peer-to-peer radio behind AirDrop, AirPlay Receiver,
+# Universal Control, Sidecar and Continuity Camera. While it is up it pulls the
+# Wi-Fi radio off the home channel at intervals; on 2026-10-22 that measured as
+# 74-715 ms average router ping (3.4 s worst) with it up, 17 ms with it down.
+# macOS raises it again at every boot and whenever one of those features wakes,
+# so a one-off `ifconfig awdl0 down` doesn't last: this daemon re-asserts it at
+# boot and every 60 s. Those features stop working while it is installed.
+# To undo:
+#   sudo launchctl bootout system/com.user.awdl-off
+#   sudo rm /Library/LaunchDaemons/com.user.awdl-off.plist
+#   sudo ifconfig awdl0 up
+#
+# Written with `sudo tee` rather than via a temp file so that
+# chezmoi-security-audit, which sources this script with every side-effecting
+# command stubbed, stays side-effect free.
+
+awdl_label=com.user.awdl-off
+awdl_plist=/Library/LaunchDaemons/${awdl_label}.plist
+awdl_desired=$(
+    cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${awdl_label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/sbin/ifconfig</string>
+        <string>awdl0</string>
+        <string>down</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>60</integer>
+</dict>
+</plist>
+EOF
+)
+
+if [[ "$(cat "$awdl_plist" 2>/dev/null)" != "$awdl_desired" ]]; then
+    printf '%s\n' "$awdl_desired" | sudo tee "$awdl_plist" >/dev/null
+    sudo chown root:wheel "$awdl_plist"
+    sudo chmod 644 "$awdl_plist"
+    sudo launchctl bootout "system/${awdl_label}" 2>/dev/null || true
+fi
+if ! sudo launchctl print "system/${awdl_label}" >/dev/null 2>&1; then
+    sudo launchctl bootstrap system "$awdl_plist"
+fi
+echo "AWDL: kept down by ${awdl_label} (boot + every 60 s)."
+
+# =============================================================================
 # Analytics & telemetry
 # =============================================================================
 
@@ -169,4 +225,4 @@ sudo defaults write "/Library/Application Support/CrashReporter/DiagnosticMessag
 sudo defaults write "/Library/Application Support/CrashReporter/DiagnosticMessagesHistory" ThirdPartyDataSubmit -bool false
 
 echo ""
-echo "Done. Firewall + stealth, Guest & auto-login off, SSH remote login off, Touch ID sudo, energy, auto-updates (incl. security-definition data), and analytics opt-out active."
+echo "Done. Firewall + stealth, Guest & auto-login off, SSH remote login off, Touch ID sudo, energy, auto-updates (incl. security-definition data), AWDL kept down, and analytics opt-out active."
