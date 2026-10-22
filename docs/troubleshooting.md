@@ -247,6 +247,45 @@ gpg --batch --status-fd 2 --decrypt msg.asc 2>&1 >/dev/null \
 
 See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-specific-traps).
 
+## Network & VPN
+
+### Wi-Fi latency spikes, HTTPS requests time out
+
+**Cause**: AWDL (`awdl0`, the radio behind AirDrop, AirPlay Receiver, Universal Control and Sidecar) hops the Wi-Fi radio off-channel. Signature: router ping averaging 100+ ms with multi-second peaks while the signal is excellent and a phone on the same network is fine.
+
+**Fix**: the `com.user.awdl-off` LaunchDaemon installed by `~/.config/chezmoi/scripts/macos-sudo.sh` keeps it down. Check it:
+
+```bash
+ifconfig awdl0 | head -1                          # must not contain UP
+launchctl print system/com.user.awdl-off | grep state
+```
+
+If the daemon is missing, re-run `macos-sudo.sh`.
+
+### NordVPN asks for an administrator password over and over
+
+**Cause**: its privileged helper installs but launchd never loads it, so the app reinstalls it — one password prompt each time. Two independent switches can block the helper, and both survive uninstalling the app:
+
+- The **Nordvpn S.A.** developer entry under System Settings ➜ General ➜ Login Items & Extensions ➜ Allow in the Background is off.
+- launchd's own disabled list has `com.nordvpn.macos.helper` => disabled.
+
+**Fix**: quit NordVPN, turn **Nordvpn S.A.** on in Allow in the Background, then:
+
+```bash
+launchctl print-disabled system | grep nordvpn   # shows the launchd override
+sudo launchctl enable system/com.nordvpn.macos.helper
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.nordvpn.macos.helper.plist
+launchctl print system/com.nordvpn.macos.helper | grep state   # state = running
+```
+
+`Bootstrap failed: 5: Input/output error` means the launchd override is still set. `sudo sfltool dumpbtm | grep -i -A12 nordvpn` shows the Login Items side; `sfltool resetbtm` (+ reboot) is the last resort, since it resets every app's background approval.
+
+### NordVPN connected but nothing loads
+
+**Cause**: full **Threat Protection** — its endpoint-security extension (`com.nordvpn.macos.Shield`) inspects every connection, and on this machine it blocked internet access outright (Oct 2026).
+
+**Fix**: turn Threat Protection off in NordVPN's settings. Leave it off; see the [new-machine runbook](runbooks/new-machine.md#5-manual-app-config) for the supported NordVPN settings.
+
 ## See also
 
 - [Recover from drift](runbooks/recover-from-drift.md)
