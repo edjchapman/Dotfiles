@@ -121,7 +121,7 @@ aws sso login                  # AWS SSO — default profile
 These can't be templated — they require in-app sign-in or System Settings clicks.
 
 - **Brave** — set as default browser; Shields aggressive; DuckDuckGo; install Dashlane extension.
-- **NordVPN** — sign in; approve the system extension when prompted. Settings: NordLynx, Auto-connect, Kill Switch on, **Threat Protection Lite** (DNS-level ad/tracker/malware blocking) rather than full Threat Protection, Meshnet off unless needed, Analytics off. Full Threat Protection runs a second system extension that inspects every connection; enabling it in Oct 2026 coincided with stalled HTTPS and long latency spikes. If you turn it on, re-test: `ping -c 20 <router>` should average under ~30 ms.
+- **NordVPN** — sign in; approve the system extension when prompted. Settings: NordLynx, Auto-connect, Kill Switch on, **Threat Protection off**, Meshnet off unless needed, Analytics off. Full Threat Protection runs an endpoint-security extension that inspects every connection; in Oct 2026 it blocked internet access outright. If NordVPN keeps asking for an administrator password, see [Troubleshooting](../troubleshooting.md#nordvpn-asks-for-an-administrator-password-over-and-over).
 - **LuLu** — launch once and approve its System and Network Extensions. Keep "Allow Apple programs" and "Allow installed applications" on so first launch isn't a wall of prompts, then allow NordVPN (app and its extension) explicitly when asked — blocking the VPN's helper stalls every connection behind the Kill Switch.
 - **ProtonMail** — sign in.
 - **iTerm2** — launch once to populate `~/.config/iterm2/`.
