@@ -84,7 +84,7 @@ What this triggers, in order:
 5. Run `run_onchange_03-macos-defaults.sh` — applies all `defaults write` entries (Dock, Finder, keyboard, screenshots, menu bar / Control Center, privacy).
 6. Run `run_onchange_04-dock-layout.sh.tmpl` — sets Dock contents via `dockutil`.
 7. Run `run_onchange_05-login-items.sh` — reconciles the "Open at Login" set (LuLu, NordVPN, Google Drive, Amphetamine) via System Events. Needs a one-time Automation permission grant for the terminal.
-8. Run `run_once_after_05-macos-sudo.sh` — prompts for password, configures firewall, stealth, Touch ID for sudo, energy, auto-updates, and account hardening (Guest account off, FileVault asserted).
+8. Run `run_once_after_05-macos-sudo.sh` — prompts for password, configures firewall, stealth, Touch ID for sudo, energy, auto-updates, account hardening (Guest account off, FileVault asserted), and installs the `com.user.awdl-off` LaunchDaemon that keeps AWDL down (AirDrop, AirPlay Receiver, Universal Control and Sidecar stop working while it is installed — the script's comment has the undo commands).
 9. Deploy every `dot_*` file to `$HOME` and decrypt every `encrypted_*` file.
 10. Run `run_onchange_after_07-claude-global-symlinks.sh` — clones `claude-code-config` to `~/Development/claude-code-config` if missing, then wires `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` as symlinks into it (delegates to that repo's `scripts/setup-global.sh`).
 
@@ -121,8 +121,8 @@ aws sso login                  # AWS SSO — default profile
 These can't be templated — they require in-app sign-in or System Settings clicks.
 
 - **Brave** — set as default browser; Shields aggressive; DuckDuckGo; install Dashlane extension.
-- **NordVPN** — Kill Switch on, NordLynx, Auto-connect, Threat Protection on, Analytics off.
-- **LuLu** — launch once, approve System and Network Extensions.
+- **NordVPN** — sign in; approve the system extension when prompted. Settings: NordLynx, Auto-connect, Kill Switch on, **Threat Protection Lite** (DNS-level ad/tracker/malware blocking) rather than full Threat Protection, Meshnet off unless needed, Analytics off. Full Threat Protection runs a second system extension that inspects every connection; enabling it in Oct 2026 coincided with stalled HTTPS and long latency spikes. If you turn it on, re-test: `ping -c 20 <router>` should average under ~30 ms.
+- **LuLu** — launch once and approve its System and Network Extensions. Keep "Allow Apple programs" and "Allow installed applications" on so first launch isn't a wall of prompts, then allow NordVPN (app and its extension) explicitly when asked — blocking the VPN's helper stalls every connection behind the Kill Switch.
 - **ProtonMail** — sign in.
 - **iTerm2** — launch once to populate `~/.config/iterm2/`.
 - **System Settings ➜ Lock Screen** — set "Require password after screen saver begins or display is off" to **Immediately**. This can't be set unattended on macOS 26 (the `defaults` keys are inert; the authoritative `sysadminctl -screenLock` needs sudo or a config profile).
