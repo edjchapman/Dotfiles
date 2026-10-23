@@ -19,6 +19,12 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 | Drop drift cache and start fresh | `rm -rf ~/.cache/chezmoi-drift` |
 | Click drift notification → opens terminal at `mac` | (automatic from the daily LaunchAgent) |
 
+## Network
+
+| Goal | Command |
+|---|---|
+| One-line router / internet / HTTPS snapshot, to compare before and after a change | `net-check [label]` |
+
 ## chezmoi
 
 | Goal | Command |
