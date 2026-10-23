@@ -253,7 +253,21 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Find the slow hop first.** `net-check [label]` prints router and `1.1.1.1` ping, an HTTPS timing and the default route on one line; run it before and after each change. If the router ping alone carries the delay, the problem is between the Mac and the hub, not the ISP.
 
-**Then check another device.** Ping the router (or load a page) from a phone on the same Wi-Fi during a slow spell. Phone slow too ➜ the hub or the airspace, not the Mac — power-cycle the hub and check its connected-devices list for a device saturating it. In Oct 2026, spells of 0.3–2.8 s router ping with zero loss also showed on a phone.
+**Then check another device.** Ping the router (or load a page) from a phone on the same Wi-Fi during a slow spell. Phone slow too ➜ the hub or the airspace, not the Mac — power-cycle the hub and check its connected-devices list for a device saturating it.
+
+**Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. Sample every 10 s for 30 minutes before and after, and compare the share of samples over 100 ms.
+
+**Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal, phone slow too) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion. They stopped within the hour that saw a hub outage and NordVPN + LuLu being uninstalled; either could be the cause. If they return, start at the hub.
+
+### A removed app's system extension is still loaded
+
+**Cause**: `brew uninstall` (with or without `--zap`) deletes the app bundle without deactivating its system extension, and only the owning app can deactivate one. The extension stays `[activated enabled]` across reboots with no app behind it, and System Settings ➜ General ➜ Login Items & Extensions offers no Delete for it. `systemextensionsctl uninstall` refuses while SIP is on.
+
+```bash
+systemextensionsctl list | grep -i <vendor>
+```
+
+**Fix**: reinstall the cask, then drag the app to the Bin in Finder (which asks to remove its extensions), or use the app's own uninstaller. Then `brew uninstall --cask --zap <cask>` to clear Homebrew's record. To avoid it, remove extension-carrying apps (VPNs, firewalls, endpoint security) through Finder or their uninstaller first, and only then drop the cask.
 
 ## See also
 
