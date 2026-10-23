@@ -260,7 +260,7 @@ ifconfig awdl0 | head -1                          # must not contain UP
 launchctl print system/com.user.awdl-off | grep state
 ```
 
-If the daemon is missing, re-run `macos-sudo.sh`. If AWDL is already down, suspect [NordVPN's protection features](#nordvpn-connected-but-slow-or-nothing-loads) — same signature.
+If the daemon is missing, re-run `macos-sudo.sh`. If AWDL is already down and it started on wake, see [Network slow after waking the Mac](#network-slow-after-waking-the-mac-with-nordvpn-connected) — same signature.
 
 ### NordVPN asks for an administrator password over and over
 
@@ -280,17 +280,18 @@ launchctl print system/com.nordvpn.macos.helper | grep state   # state = running
 
 `Bootstrap failed: 5: Input/output error` means the launchd override is still set. `sudo sfltool dumpbtm | grep -i -A12 nordvpn` shows the Login Items side; `sfltool resetbtm` (+ reboot) is the last resort, since it resets every app's background approval.
 
-### NordVPN connected but slow, or nothing loads
+### Network slow after waking the Mac, with NordVPN connected
 
-**Fix**: in NordVPN's settings turn off **every** protection feature — Threat Protection *and* its malware scanning, scam protection and the rest. The main switch alone isn't enough. Leave them off; see the [new-machine runbook](runbooks/new-machine.md#5-manual-app-config).
+**Fix**: disconnect the VPN and reconnect it. Whatever is left wears off within ~10 minutes. Quitting NordVPN outright also works. Check with `net-check` before and after.
 
-**Cause**: each feature routes traffic through the `com.nordvpn.macos.Shield` extension for inspection, which stalls every packet. It looks like a Wi-Fi fault — router ping is slow too, even with the app quit, because the extension stays loaded:
+**Cause**: not fully pinned down. The worst episode followed a wake with the tunnel up: NordVPN's helper restarted and the tunnel came back degraded. It looks like a Wi-Fi fault, because even the router hop is slow while the signal is excellent. A milder dip (router ~20 ms, internet ~120 ms) also came and went within minutes with no wake and no restart. **Not** the Real-time protection settings: on 2026-10-23 all 12 were re-enabled group by group, VPN on and off, with no effect — and turning protection off mid-episode changed nothing that time didn't.
 
-| Protection (Oct 2026) | Router ping, avg / max | HTTPS |
+| Episode, 2026-10-23 | Router avg / max | HTTPS worst |
 |---|---|---|
-| All features on | 1,014 / 2,133 ms | timed out |
-| Main switch off | 41 / 127 ms | 0.7–0.9 s |
-| All off, VPN connected | 10 / 54 ms | 0.25 s |
+| After wake, VPN connected | 293 / 1,025 ms | 4.5 s |
+| VPN disconnected | 15–22 / 57–82 ms | 5.7 s |
+| ~10 min later | 6 / 27 ms | 0.7 s |
+| VPN reconnected | 7–10 / 32 ms | 0.9 s |
 
 ## See also
 
