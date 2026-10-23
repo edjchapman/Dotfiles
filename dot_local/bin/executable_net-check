@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# net-check — one-line network health snapshot, for comparing runs.
+#
+# Measures the router hop separately from the internet, so a slow first hop
+# (radio or local filtering) is told apart from a slow ISP or VPN. Run it
+# before and after each change and compare the lines. Healthy on this
+# network: router ~5 ms avg, HTTPS < 1 s; see docs/troubleshooting.md,
+# "Network & VPN", for the signatures this was built to tell apart.
+#
+# Usage: net-check [label]
+# Exit: 0 always — it reports, it doesn't judge.
+
+set -uo pipefail
+
+case "${1:-}" in
+    -h | --help)
+        sed -n '2,11s/^# \{0,1\}//p' "$0"
+        exit 0
+        ;;
+esac
+
+label=${1:-$(date +%T)}
+
+# The router on the physical interface, even while a VPN owns the default route.
+gw=$(netstat -rn -f inet | awk '$1 == "default" && $NF ~ /^en/ { print $2; exit }')
+
+ping_stats() {
+    ping -c "$2" -i 0.2 "$1" 2>/dev/null \
+        | awk -F'[/ ]' '/round-trip/ { printf "%.0f / %.0f ms", $8, $9 }'
+}
+
+router=$([ -n "$gw" ] && ping_stats "$gw" 30)
+internet=$(ping_stats 1.1.1.1 15)
+
+https=""
+for url in https://www.google.com https://github.com https://www.bbc.co.uk; do
+    t=$(curl -sS -o /dev/null -m 10 -w '%{time_total}' "$url" 2>/dev/null) || t=FAIL
+    https+="$t "
+done
+
+iface=$(route -n get default 2>/dev/null | awk '/interface:/ { print $2 }')
+
+printf '%-24s | router %-14s | 1.1.1.1 %-14s | https %s| via %s\n' \
+    "$label" "${router:-FAIL}" "${internet:-FAIL}" "$https" "${iface:-none}"
