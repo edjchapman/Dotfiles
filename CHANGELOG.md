@@ -17,7 +17,7 @@ All notable changes to this repo are recorded here. Format follows [Keep a Chang
 
 ### Removed
 
-- NordVPN and LuLu: both casks leave the Brewfile, `run_onchange_05-login-items.sh` now removes their login items, and the runbook and troubleshooting entries for them are gone. The `com.user.awdl-off` LaunchDaemon is retired too: `macos-sudo.sh` now uninstalls it where present (re-enabling AirDrop, AirPlay Receiver, Universal Control and Sidecar). The October 2026 Wi-Fi slowdown it was added for also showed on a phone, so it was never AWDL-specific. `docs/troubleshooting.md` records that slowdown without naming a cause, and adds an entry for system extensions that outlive a `brew uninstall`.
+- NordVPN and LuLu: both casks leave the Brewfile, `run_onchange_05-login-items.sh` now removes their login items, and the runbook and troubleshooting entries for them are gone. The `com.user.awdl-off` LaunchDaemon is retired too: `macos-sudo.sh` now uninstalls it where present (re-enabling AirDrop, AirPlay Receiver, Universal Control and Sidecar). The October 2026 Wi-Fi slowdown it was added for also showed on a phone, so it was never AWDL-specific. `docs/troubleshooting.md` records that slowdown without naming a cause, and adds an entry for system extensions that outlive a `brew uninstall`, plus a loaded-vs-idle ping test for bufferbloat at the hub.
 - The tracked `standups/` directory. Local daily-logs written by the `session-end.sh` hook are now `.gitignore`d scratch; the canonical record is issue #114.
 
 ### Fixed
