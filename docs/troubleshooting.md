@@ -260,7 +260,7 @@ ifconfig awdl0 | head -1                          # must not contain UP
 launchctl print system/com.user.awdl-off | grep state
 ```
 
-If the daemon is missing, re-run `macos-sudo.sh`.
+If the daemon is missing, re-run `macos-sudo.sh`. If AWDL is already down, suspect [NordVPN's protection features](#nordvpn-connected-but-slow-or-nothing-loads) — same signature.
 
 ### NordVPN asks for an administrator password over and over
 
@@ -280,11 +280,17 @@ launchctl print system/com.nordvpn.macos.helper | grep state   # state = running
 
 `Bootstrap failed: 5: Input/output error` means the launchd override is still set. `sudo sfltool dumpbtm | grep -i -A12 nordvpn` shows the Login Items side; `sfltool resetbtm` (+ reboot) is the last resort, since it resets every app's background approval.
 
-### NordVPN connected but nothing loads
+### NordVPN connected but slow, or nothing loads
 
-**Cause**: full **Threat Protection** — its endpoint-security extension (`com.nordvpn.macos.Shield`) inspects every connection, and on this machine it blocked internet access outright (Oct 2026).
+**Fix**: in NordVPN's settings turn off **every** protection feature — Threat Protection *and* its malware scanning, scam protection and the rest. The main switch alone isn't enough. Leave them off; see the [new-machine runbook](runbooks/new-machine.md#5-manual-app-config).
 
-**Fix**: turn Threat Protection off in NordVPN's settings. Leave it off; see the [new-machine runbook](runbooks/new-machine.md#5-manual-app-config) for the supported NordVPN settings.
+**Cause**: each feature routes traffic through the `com.nordvpn.macos.Shield` extension for inspection, which stalls every packet. It looks like a Wi-Fi fault — router ping is slow too, even with the app quit, because the extension stays loaded:
+
+| Protection (Oct 2026) | Router ping, avg / max | HTTPS |
+|---|---|---|
+| All features on | 1,014 / 2,133 ms | timed out |
+| Main switch off | 41 / 127 ms | 0.7–0.9 s |
+| All off, VPN connected | 10 / 54 ms | 0.25 s |
 
 ## See also
 
