@@ -257,7 +257,17 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. Sample every 10 s for 30 minutes before and after, and compare the share of samples over 100 ms.
 
-**Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal, phone slow too) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion. They stopped within the hour that saw a hub outage and NordVPN + LuLu being uninstalled; either could be the cause. If they return, start at the hub.
+**Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal, phone slow too) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion. They stopped within the hour that saw a hub outage and NordVPN + LuLu being uninstalled; either could be the cause. If they return, start at the hub. A later 3-minute spell lined up with a large download from the Mac, which points at the next test.
+
+**Test for bufferbloat.** A download that fills the hub's queue inflates router ping for every device without dropping packets — the same signature, and it explains spells while the Mac is idle (another device downloading). Compare an idle ping with one taken under load:
+
+```bash
+ping -c 20 192.168.1.254 | tail -1                                   # idle
+curl -so /dev/null 'https://speed.cloudflare.com/__down?bytes=500000000' &
+ping -c 20 192.168.1.254 | tail -1; kill %1                          # under load
+```
+
+Loaded average in the hundreds of ms against single digits idle ➜ bufferbloat. The fix is on the router, not the Mac: turn on SQM / smart QoS if the hub has it, or put a router that does behind it.
 
 ### A removed app's system extension is still loaded
 
