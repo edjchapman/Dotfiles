@@ -6,6 +6,7 @@ All notable changes to this repo are recorded here. Format follows [Keep a Chang
 
 ### Added
 
+- `net-check --watch [label]` samples router and `1.1.1.1` ping every 10 s for 30 minutes (`--every SECS`, `--count N`) and ends with the share of samples over 100 ms per hop, counting lost replies as slow. It turns the troubleshooting playbook's "judge a fix over half an hour" step into one command. Ctrl-C stops early and still prints the summary. Covered by `tests/net-check.bats`, which also guards the one-shot snapshot line.
 - `net-check [label]` (`~/.local/bin`) prints a one-line router / `1.1.1.1` / HTTPS / default-route snapshot for before-and-after comparisons while troubleshooting the network. `docs/troubleshooting.md` gains a Network entry built around it: find the slow hop, then test a second device before blaming the Mac.
 - Monthly `age-history-scan` audit job (`scripts/check-age-history.sh`): verifies every historical blob of every `*.age` path in git history is valid age ciphertext, enforcing the never-plaintext invariant continuously instead of by one-off review.
 

@@ -1,25 +1,50 @@
 #!/usr/bin/env bash
-# net-check — one-line network health snapshot, for comparing runs.
+# net-check — network health snapshot, or a sampled watch, for comparing runs.
 #
 # Measures the router hop separately from the internet, so a slow first hop
 # (radio or local filtering) is told apart from a slow ISP or VPN. Run it
 # before and after each change and compare the lines. Healthy on this
 # network: router ~5 ms avg, HTTPS < 1 s; see docs/troubleshooting.md,
-# "Network & VPN", for the signatures this was built to tell apart.
+# "Network", for the signatures this was built to tell apart.
 #
 # Usage: net-check [label]
-# Exit: 0 always — it reports, it doesn't judge.
+#        net-check --watch [--every SECS] [--count N] [label]
+#
+# --watch pings the router and 1.1.1.1 once per sample (default every 10 s,
+# 180 samples = 30 min), prints each sample, then a summary line with the
+# share over 100 ms. Ctrl-C stops early and still prints the summary.
+# Exit: 0 — it reports, it doesn't judge (2 on a usage error).
 
 set -uo pipefail
 
-case "${1:-}" in
-    -h | --help)
-        sed -n '2,11s/^# \{0,1\}//p' "$0"
-        exit 0
-        ;;
-esac
+usage() { sed -n '2,16s/^# \{0,1\}//p' "$0"; }
 
-label=${1:-$(date +%T)}
+watch=0 every=10 count=180 label=""
+while (($# > 0)); do
+    case "$1" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        --watch) watch=1 ;;
+        --every | --count)
+            [[ ${2:-} =~ ^[0-9]+$ ]] || {
+                echo "net-check: $1 needs a whole number" >&2
+                exit 2
+            }
+            if [[ $1 == --every ]]; then every=$2; else count=$2; fi
+            shift
+            ;;
+        -*)
+            echo "net-check: unknown option $1" >&2
+            usage >&2
+            exit 2
+            ;;
+        *) label=$1 ;;
+    esac
+    shift
+done
+label=${label:-$(date +%T)}
 
 # The router on the physical interface, even while a VPN owns the default route.
 gw=$(netstat -rn -f inet | awk '$1 == "default" && $NF ~ /^en/ { print $2; exit }')
@@ -28,6 +53,56 @@ ping_stats() {
     ping -c "$2" -i 0.2 "$1" 2>/dev/null \
         | awk -F'[/ ]' '/round-trip/ { printf "%.0f / %.0f ms", $8, $9 }'
 }
+
+# One round trip in whole ms, or "lost". The 5 s cap keeps a dead hop from
+# stretching the sampling interval.
+ping_once() {
+    [ -n "$1" ] || {
+        echo lost
+        return
+    }
+    ping -c 1 -t 5 "$1" 2>/dev/null \
+        | awk -F'time=' 'NF > 1 { split($2, a, " "); printf "%.0f\n", a[1]; found = 1; exit }
+                         END { if (!found) print "lost" }'
+}
+
+with_unit() { if [[ $1 == lost ]]; then echo lost; else echo "$1 ms"; fi; }
+
+# Lost samples count as slow: the spells this hunts showed up as multi-second
+# stalls, and a lost reply is the same stall past the cap.
+summarise() { # <name> <values...>
+    local name=$1
+    shift
+    printf '%s\n' "$@" | awk -v name="$name" '
+        NF == 0 { next }
+        { n++ }
+        $1 == "lost" { lost++; slow++; next }
+        { if ($1 > 100) slow++; if ($1 > max) max = $1 }
+        END {
+            if (n == 0) { printf "%s no samples", name; exit }
+            printf "%s >100ms %d%% (%d/%d), max %d ms, lost %d", name, slow * 100 / n, slow, n, max, lost
+        }'
+}
+
+if ((watch)); then
+    routers=() internets=()
+    stop=0
+    trap 'stop=1' INT
+    for ((i = 1; i <= count && stop == 0; i++)); do
+        r=$(ping_once "$gw")
+        n=$(ping_once 1.1.1.1)
+        ((stop)) && break
+        routers+=("$r")
+        internets+=("$n")
+        printf '%s  router %-8s  1.1.1.1 %s\n' "$(date +%T)" "$(with_unit "$r")" "$(with_unit "$n")"
+        ((i < count && stop == 0)) && sleep "$every"
+    done
+    trap - INT
+    printf '%-24s | %d samples, %d s apart | %s | %s\n' "$label" "${#routers[@]}" "$every" \
+        "$(summarise router ${routers[@]+"${routers[@]}"})" \
+        "$(summarise 1.1.1.1 ${internets[@]+"${internets[@]}"})"
+    exit 0
+fi
 
 router=$([ -n "$gw" ] && ping_stats "$gw" 30)
 internet=$(ping_stats 1.1.1.1 15)

@@ -24,6 +24,7 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 | Goal | Command |
 |---|---|
 | One-line router / internet / HTTPS snapshot, to compare before and after a change | `net-check [label]` |
+| Sample router and internet ping every 10 s for 30 min, then report the share over 100 ms | `net-check --watch [label]` |
 
 ## chezmoi
 

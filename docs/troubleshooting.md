@@ -255,7 +255,7 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Then check another device.** Ping the router (or load a page) from a phone on the same Wi-Fi during a slow spell. Phone slow too ➜ the hub or the airspace, not the Mac — power-cycle the hub and check its connected-devices list for a device saturating it.
 
-**Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. Sample every 10 s for 30 minutes before and after, and compare the share of samples over 100 ms.
+**Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. `net-check --watch [label]` samples the router and `1.1.1.1` every 10 s for 30 minutes (`--every`/`--count` to change), then prints the share of samples over 100 ms for each hop; run it before and after, and compare those shares. Ctrl-C stops early with the summary so far.
 
 **Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion, then stopped around a hub outage and the NordVPN + LuLu uninstall. On 26 Oct they returned, Mac-only (phone fast), for ~25 minutes after a restart with the load average at 8, then 84 samples ran 2–9 ms. Spells straight after boot ➜ suspect indexing and sync, not the network.
 
