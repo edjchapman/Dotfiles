@@ -257,9 +257,9 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. Sample every 10 s for 30 minutes before and after, and compare the share of samples over 100 ms.
 
-**Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal, phone slow too) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion. They stopped within the hour that saw a hub outage and NordVPN + LuLu being uninstalled; either could be the cause. If they return, start at the hub. A later 3-minute spell lined up with a large download from the Mac, which points at the next test.
+**Oct 2026 — cause unproven.** Spells of 0.3–4.3 s router ping (zero loss, strong signal) survived ruling out AWDL, the VPN tunnel, Threat Protection and channel congestion, then stopped around a hub outage and the NordVPN + LuLu uninstall. On 26 Oct they returned, Mac-only (phone fast), for ~25 minutes after a restart with the load average at 8, then 84 samples ran 2–9 ms. Spells straight after boot ➜ suspect indexing and sync, not the network.
 
-**Test for bufferbloat.** A download that fills the hub's queue inflates router ping for every device without dropping packets — the same signature, and it explains spells while the Mac is idle (another device downloading). Compare an idle ping with one taken under load:
+**Test for bufferbloat.** A download filling the hub's queue inflates router ping for every device without loss — the same signature. Compare idle with loaded:
 
 ```bash
 ping -c 20 192.168.1.254 | tail -1                                   # idle
@@ -267,17 +267,21 @@ curl -so /dev/null 'https://speed.cloudflare.com/__down?bytes=500000000' &
 ping -c 20 192.168.1.254 | tail -1; kill %1                          # under load
 ```
 
-Loaded average in the hundreds of ms against single digits idle ➜ bufferbloat. The fix is on the router, not the Mac: turn on SQM / smart QoS if the hub has it, or put a router that does behind it.
+Loaded in the hundreds of ms against single digits idle ➜ bufferbloat; fix it on the router (SQM / smart QoS). Ruled out on 26 Oct for the Mac's own downloads: 82 ms loaded vs 146 ms idle.
 
 ### A removed app's system extension is still loaded
 
-**Cause**: `brew uninstall` (with or without `--zap`) deletes the app bundle without deactivating its system extension, and only the owning app can deactivate one. The extension stays `[activated enabled]` across reboots with no app behind it, and System Settings ➜ General ➜ Login Items & Extensions offers no Delete for it. `systemextensionsctl uninstall` refuses while SIP is on.
+**Cause**: `brew uninstall` (even with `--zap`) deletes the app without deactivating its system extension, and only the owning app can. It stays `[activated enabled]` across reboots; `systemextensionsctl uninstall` refuses while SIP is on.
 
 ```bash
 systemextensionsctl list | grep -i <vendor>
 ```
 
-**Fix**: reinstall the cask, then drag the app to the Bin in Finder (which asks to remove its extensions), or use the app's own uninstaller. Then `brew uninstall --cask --zap <cask>` to clear Homebrew's record. To avoid it, remove extension-carrying apps (VPNs, firewalls, endpoint security) through Finder or their uninstaller first, and only then drop the cask.
+**Check its type first.** The unfiltered list groups extensions by type, and only `network_extension` sits in the packet path. `endpoint_security` ones — like NordVPN's leftover `com.nordvpn.macos.Shield` — can't add latency.
+
+**Fix (Endpoint Security)**: System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions ➜ toggle it off, then re-check after a restart. Killing the process fails: launchd relaunches it as root.
+
+**Fix (other types)**: reinstall the cask, launch it once (an unopened copy doesn't own the old extension), then drag it to the Bin and accept the prompt to remove its extensions. Then `brew uninstall --cask --zap <cask>`. To avoid it, remove extension-carrying apps through Finder or their uninstaller before dropping the cask.
 
 ## See also
 
