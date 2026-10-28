@@ -11,19 +11,19 @@
 
 set -euo pipefail
 
-# Apps that SHOULD launch at login (sync + keep-awake).
+# Apps that SHOULD launch at login (firewall + sync + keep-awake).
 DESIRED_APPS=(
+    "/Applications/LuLu.app"
     "/Applications/Google Drive.app"
     "/Applications/Amphetamine.app"
 )
 
 # Login items that must NOT be present (removed if found).
 # Caffeine duplicates Amphetamine (and is unmanaged); Fing kept installed but
-# no longer auto-starts; LuLu and NordVPN were removed from the Brewfile.
+# no longer auto-starts; NordVPN was removed from the Brewfile.
 REMOVE_NAMES=(
     "Caffeine"
     "Fing"
-    "LuLu"
     "NordVPN"
 )
 
