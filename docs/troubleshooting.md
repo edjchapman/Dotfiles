@@ -257,12 +257,9 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Judge a fix over half an hour, not one reading.** Slow spells come and go every few minutes, so a change made just before a quiet spell looks like a fix. `net-check --watch [label]` samples the router and `1.1.1.1` every 10 s for 30 minutes (`--every`/`--count` to change), then prints the share of samples over 100 ms for each hop; run it before and after, and compare those shares. Ctrl-C stops early with the summary so far.
 
-**Oct 2026 — cause unproven.** Spells: 0.3–4.3 s router ping, zero loss, strong signal. Two suspects:
+**Oct–Nov 2026 — NordVPN's `Shield` extension.** Spells: 0.3–4.3 s router ping, zero loss, strong signal. They came and went with `com.nordvpn.macos.Shield` ("NordVPN protection", endpoint security) across three transitions below, not with the VPN tunnel. Re-enabling it to confirm hasn't been tried.
 
-- **NordVPN's `Shield` extension** — spells began when its features were switched on after a NordVPN update, and it stayed loaded through every test below until macOS 27.2.
-- **The Mac's Wi-Fi software** (driver or `airportd`) — by elimination, and replaced by 27.2.
-
-To tell them apart, reinstall NordVPN with Threat Protection off for a few days, then switch it on, with a `net-check --watch` after each step.
+**Fix, keeping the VPN:** System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions ➜ switch off **NordVPN protection**, then restart. `systemextensionsctl list` should show `[activated disabled]`. The app's own Real-time protection toggle doesn't unload it. The VPN still connects; the app's Protect features stop.
 
 | Date | What happened | Ruled out |
 |---|---|---|
@@ -270,6 +267,8 @@ To tell them apart, reinstall NordVPN with Threat Protection off for a few days,
 | 26 Oct | Mac-only (phone fast), ~25 min after a restart at load 8 | — |
 | 27 Oct | Mac-only, 2 min, router 842 ms avg, during `brewup` | Its parts, re-run on demand: 6 parallel downloads (3.9 ms), 8 busy cores (3.2 ms), the real cask upgrades (8–65 ms); Wi-Fi retry counts flat |
 | 28 Oct | macOS 27.2 (new Wi-Fi driver): `Shield` gone; router 4 ms straight after boot at load 145–189, then a 30-min watch with 0/180 samples over 100 ms (max 11 ms) | Post-boot load as the trigger |
+| 2 Nov | NordVPN reinstalled, `Shield` back `[activated enabled]` with Real-time protection off: router 355 ms avg (1.9 s max) with the VPN off, 109 ms (1.0 s max) on; HTTPS 3–9 s | VPN tunnel (worse with it off); the 27.2 Wi-Fi driver (clean on 28 Oct) |
+| 3 Nov | `Shield` disabled in System Settings, restart: router 4 ms at load 113 during `brewup`, then two 30-min watches at 0/180 over 100 ms (max 73 ms, then 19 ms), VPN connected | — |
 
 **Read the Mac's own link-quality rating** to timestamp a spell after the fact (zsh shadows `log`, so give the full path):
 
@@ -303,6 +302,8 @@ systemextensionsctl list | grep -i <vendor>
 **Fix**: the System Settings ➜ General ➜ Login Items & Extensions list doesn't show an extension whose app is gone, so there's nothing to toggle, and killing the process fails because launchd relaunches it as root. Instead, reinstall the cask, launch it once (an unopened copy doesn't own the old extension), then drag it to the Bin and accept the prompt to remove its extensions. Then `brew uninstall --cask --zap <cask>`. To avoid it, remove extension-carrying apps through Finder or their uninstaller before dropping the cask.
 
 NordVPN's leftover `com.nordvpn.macos.Shield` stayed `[activated enabled]` through every restart until the macOS 27.2 update, after which `systemextensionsctl list` showed none, so a major OS update may clear an orphan too.
+
+**App still installed?** Switch the extension off instead, under its type in the same Login Items & Extensions pane (`systemextensionsctl list` names the pane), and restart.
 
 ## See also
 
