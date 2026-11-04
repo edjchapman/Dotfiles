@@ -235,6 +235,21 @@ defaults write com.googlecode.iterm2 LoadPrefsFromCustomFolder -bool true
 defaults write com.google.Chrome KeystoneRegistrationDisabled -bool true
 
 # =============================================================================
+# NordVPN — opt out of analytics, keep launching at login
+# =============================================================================
+
+# Individual keys, never the whole plist: it also holds timestamps, counters and
+# device IDs. These keys are undocumented, so an app update could rename them;
+# chezmoi-defaults-audit reports it if the app resets one. Settings that aren't
+# in this plist are listed in docs/runbooks/nordvpn.md.
+#
+# The app isn't quit here because that would drop a live VPN connection.
+defaults write com.nordvpn.macos helpUsImprove -bool false
+defaults write com.nordvpn.macos isAnalyticsConsentAllowed -bool false
+defaults write com.nordvpn.macos isEngagementMeasurementConsentAllowed -bool false
+defaults write com.nordvpn.macos startOnBoot -bool true
+
+# =============================================================================
 # Restart affected services
 # =============================================================================
 

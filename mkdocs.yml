@@ -249,6 +249,7 @@ nav:
           - Secret rotation: runbooks/secret-rotation.md
           - Recover from drift: runbooks/recover-from-drift.md
           - Brew sync: runbooks/brew-sync.md
+          - NordVPN settings: runbooks/nordvpn.md
           - Branch protection: runbooks/branch-protection.md
           - Cloudflare deploys: runbooks/cloudflare-deploys.md
           - Custom domain: runbooks/custom-domain.md

@@ -423,3 +423,85 @@ run_derived() {
     run bash -c 'source "$1"; load_bootstrap_expectations; expectations pmset | wc -l' _ "$WORKDIR/derived.bash"
     [ "$(printf '%s' "$output" | tr -d ' ')" = "6" ]
 }
+
+# ------------------------------------------------------------------------------
+# NordVPN Shield. The check is extracted by name and driven against a stubbed
+# systemextensionsctl, so the real machine's extension state can't affect it.
+# ------------------------------------------------------------------------------
+
+# run_shield <listing> — print "<ok>\t<fail>\t<skip>" then any failure lines.
+run_shield() {
+    local fn
+    : >"$WORKDIR/shield.bash"
+    for fn in check check_nordvpn_shield; do
+        sed -n "/^$fn()/,/^}/p" "$SECURITY_AUDIT" >>"$WORKDIR/shield.bash"
+    done
+    grep -q '^check_nordvpn_shield()' "$WORKDIR/shield.bash"
+
+    mkdir -p "$WORKDIR/bin"
+    printf '%s' "$1" >"$WORKDIR/sysext.out"
+    printf '#!/bin/sh\ncat "%s/sysext.out"\n' "$WORKDIR" >"$WORKDIR/bin/systemextensionsctl"
+    chmod +x "$WORKDIR/bin/systemextensionsctl"
+
+    PATH="$WORKDIR/bin:/usr/bin:/bin" run bash -c '
+        set -uo pipefail
+        OK=0 FAIL=0 SKIP=0 FAILED=()
+        source "$1"
+        check_nordvpn_shield
+        printf "%s\t%s\t%s\n" "$OK" "$FAIL" "$SKIP"
+        printf "%s\n" "${FAILED[@]:-}"
+    ' _ "$WORKDIR/shield.bash"
+}
+
+shield_line() { # <state>
+    printf '\t*\tW5W395V82Y\tcom.nordvpn.macos.Shield (10.14.1/381)\tNordVPN protection\t[%s]\n' "$1"
+}
+
+@test "shield: disabled passes" {
+    run_shield "$(shield_line 'activated disabled')"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == $'1\t0\t0' ]]
+}
+
+@test "shield: enabled fails and names the state and the fix" {
+    run_shield "$(shield_line 'activated enabled')"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" == $'0\t1\t0' ]]
+    [[ "$output" == *"[activated enabled]"* ]]
+    [[ "$output" == *"Endpoint Security Extensions"* ]]
+}
+
+@test "shield: an unknown state fails rather than passing silently" {
+    run_shield "$(shield_line 'activated waiting for user')"
+    [[ "${lines[0]}" == $'0\t1\t0' ]]
+    [[ "$output" == *"[activated waiting for user]"* ]]
+}
+
+@test "shield: a line with no state bracket fails rather than passing silently" {
+    run_shield "$(printf '\tcom.nordvpn.macos.Shield (10.14.1/381)\tNordVPN protection')"
+    [[ "${lines[0]}" == $'0\t1\t0' ]]
+    [[ "$output" == *"unrecognised state"* ]]
+}
+
+@test "shield: a terminating copy beside an enabled one still fails" {
+    run_shield "$(shield_line 'terminated waiting to uninstall on reboot')
+$(shield_line 'activated enabled')"
+    [[ "${lines[0]}" == $'0\t1\t0' ]]
+    [[ "$output" == *"[activated enabled]"* ]]
+}
+
+@test "shield: a terminating copy on its own passes" {
+    run_shield "$(shield_line 'terminated waiting to uninstall on reboot')"
+    [[ "${lines[0]}" == $'1\t0\t0' ]]
+}
+
+@test "shield: absent from a real listing passes" {
+    run_shield "1 extension(s)
+	*	AAAAAAAAAA	com.example.other (1.0/1)	Other	[activated enabled]"
+    [[ "${lines[0]}" == $'1\t0\t0' ]]
+}
+
+@test "shield: an empty listing skips rather than passes" {
+    run_shield ""
+    [[ "${lines[0]}" == $'0\t0\t1' ]]
+}
