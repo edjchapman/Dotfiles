@@ -19,12 +19,11 @@ DESIRED_APPS=(
 
 # Login items that must NOT be present (removed if found).
 # Caffeine duplicates Amphetamine (and is unmanaged); Fing kept installed but
-# no longer auto-starts; LuLu and NordVPN were removed from the Brewfile.
+# no longer auto-starts; LuLu was removed from the Brewfile.
 REMOVE_NAMES=(
     "Caffeine"
     "Fing"
     "LuLu"
-    "NordVPN"
 )
 
 if ! command -v osascript >/dev/null 2>&1; then
