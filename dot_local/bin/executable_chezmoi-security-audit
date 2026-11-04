@@ -26,8 +26,8 @@ usage() {
 chezmoi-security-audit [--drift] [--quiet] [-h]
 
 Checks: FileVault, SIP, Gatekeeper, firewall+stealth, guest account, auto-login,
-remote Apple Events, SSH remote login, SSH key passphrase,
-AWS creds perms, age key perms, GPG signing key expiry (if configured),
+remote Apple Events, SSH remote login, NordVPN Shield extension off,
+SSH key passphrase, AWS creds perms, age key perms, GPG signing key expiry (if configured),
 auto-update toggles and energy settings (pmset) — both read out of the sudo
 bootstrap script at run time, skipped if it cannot be sourced —
 softwareupdate pending.
@@ -188,6 +188,30 @@ elif printf '%s' "$sshd_state" | grep -qiE 'sshd" => (false|enabled)'; then
 else
     check "SSH remote login off" skip
 fi
+
+# ------------------------------------------------------------------------------
+# NordVPN's Shield extension caused the Oct–Nov 2026 Wi-Fi latency spells
+# (docs/troubleshooting.md). Its only switch is in System Settings, so a reinstall
+# could bring it back unnoticed. Disabled, terminating or absent all pass, and any
+# other state fails, so a new macOS state label gets looked at. An empty listing
+# means the tool gave no answer, so skip rather than report a false pass.
+# ------------------------------------------------------------------------------
+check_nordvpn_shield() {
+    local listing bad state
+    listing=$(systemextensionsctl list 2>/dev/null)
+    if [[ -z $listing ]]; then
+        check "NordVPN Shield off" skip
+        return
+    fi
+    bad=$(printf '%s\n' "$listing" | grep -F 'com.nordvpn.macos.Shield' | grep -vE '\[(activated disabled|terminated[^]]*)\]')
+    if [[ -z $bad ]]; then
+        check "NordVPN Shield off" ok
+    else
+        state=$(printf '%s\n' "$bad" | grep -oE '\[[^]]*\]' | head -1)
+        check "NordVPN Shield off" fail "extension is ${state:-in an unrecognised state} — switch off NordVPN protection in System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions, then restart"
+    fi
+}
+check_nordvpn_shield
 
 # ------------------------------------------------------------------------------
 # SSH private keys — verify each one is passphrase-protected.

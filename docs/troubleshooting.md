@@ -259,7 +259,7 @@ See [Gotchas → Two GnuPG installations share one `~/.gnupg`](gotchas.md#macos-
 
 **Oct–Nov 2026 — NordVPN's `Shield` extension.** Spells: 0.3–4.3 s router ping, zero loss, strong signal. They came and went with `com.nordvpn.macos.Shield` ("NordVPN protection", endpoint security) across three transitions below, not with the VPN tunnel. Re-enabling it to confirm hasn't been tried.
 
-**Fix, keeping the VPN:** System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions ➜ switch off **NordVPN protection**, then restart. `systemextensionsctl list` should show `[activated disabled]`. The app's own Real-time protection toggle doesn't unload it. The VPN still connects; the app's Protect features stop.
+**Fix, keeping the VPN:** System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions ➜ switch off **NordVPN protection**, then restart. `systemextensionsctl list` should show `[activated disabled]`. The app's own Real-time protection toggle doesn't unload it. The VPN still connects; the app's Protect features stop. `chezmoi-security-audit` now fails if it comes back on, which also shows in the shell banner. See [NordVPN settings](runbooks/nordvpn.md).
 
 | Date | What happened | Ruled out |
 |---|---|---|

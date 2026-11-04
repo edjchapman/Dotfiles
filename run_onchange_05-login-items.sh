@@ -11,10 +11,11 @@
 
 set -euo pipefail
 
-# Apps that SHOULD launch at login (sync + keep-awake).
+# Apps that SHOULD launch at login (sync + keep-awake + VPN).
 DESIRED_APPS=(
     "/Applications/Google Drive.app"
     "/Applications/Amphetamine.app"
+    "/Applications/NordVPN.app"
 )
 
 # Login items that must NOT be present (removed if found).
