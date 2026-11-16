@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# disk-cleanup — report (default) or reclaim disk space held by caches that
+# regenerate on demand. Run quarterly by the com.user.disk-cleanup launchd agent
+# in report mode; deleting is always a deliberate `disk-cleanup --apply`.
+#
+# Scope is deliberately limited to things that rebuild themselves: superseded
+# JetBrains version dirs, package-manager download caches, Docker build cache
+# and *anonymous* volumes, and old log files. Named Docker volumes (project
+# databases), app data, and anything under ~/Development are never touched.
+
+set -uo pipefail
+
+APPLY=0
+NOTIFY=0
+LOG_AGE_DAYS="${DISK_CLEANUP_LOG_AGE_DAYS:-30}"
+MIN_NOTIFY_KB=$((${DISK_CLEANUP_MIN_GB:-1} * 1024 * 1024))
+TARGETS="jetbrains uv npm precommit brew docker logs"
+
+usage() {
+    cat <<'EOF'
+disk-cleanup [--dry-run|--apply] [--notify]
+
+  --dry-run  (default) List reclaimable space per target. Deletes nothing.
+  --apply    Clean every target listed by --dry-run, then report space freed.
+  --notify   Post a macOS notification with the result. In --dry-run mode it
+             fires only when at least $DISK_CLEANUP_MIN_GB (default 1) GB is
+             reclaimable.
+
+Targets:
+  jetbrains  JetBrains cache + settings dirs older than the newest version of
+             each product (e.g. PyCharm2026.2 once PyCharm2026.3 exists)
+  uv         uv cache clean
+  npm        npm cache clean --force
+  precommit  pre-commit clean
+  brew       brew cleanup -s --prune=all
+  docker     docker builder prune + docker volume prune (anonymous volumes only)
+  logs       ~/Library/Logs files older than $DISK_CLEANUP_LOG_AGE_DAYS (default 30) days
+
+A target whose tool is missing, or whose daemon is not running, is skipped.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) APPLY=0 ;;
+        --apply) APPLY=1 ;;
+        --notify) NOTIFY=1 ;;
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "disk-cleanup: unknown arg: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+kb_of() {
+    [[ $# -eq 0 ]] && {
+        echo 0
+        return
+    }
+    # A cache dir that doesn't exist yet is 0 KB, not an unavailable target.
+    { du -sk "$@" 2>/dev/null || true; } | awk '{s += $1} END {print s + 0}'
+}
+
+human() {
+    awk -v k="$1" 'BEGIN {
+        if (k >= 1048576) printf "%.1fG", k / 1048576
+        else if (k >= 1024) printf "%.0fM", k / 1024
+        else printf "%dK", k
+    }'
+}
+
+# Docker prints decimal units ("171MB", "1.857GB", "8.812kB").
+docker_size_to_kb() {
+    awk '{
+        n = $1; sub(/[A-Za-z]+$/, "", n); u = $1; sub(/^[0-9.]+/, "", u)
+        m = 1 / 1000
+        if (u == "kB" || u == "KB") m = 1
+        else if (u == "MB") m = 1000
+        else if (u == "GB") m = 1000000
+        else if (u == "TB") m = 1000000000
+        s += n * m
+    } END {printf "%d\n", s * 1000 / 1024}'
+}
+
+# One stale JetBrains dir per line: every <Product><YYYY.N> dir except the
+# newest version of that product. Non-versioned dirs (Toolbox, Daemon,
+# acp-agents) never match. Version-sorted so 2026.10 outranks 2026.9.
+jetbrains_stale() {
+    local root
+    for root in "$HOME/Library/Caches/JetBrains" "$HOME/Library/Application Support/JetBrains"; do
+        [[ -d $root ]] || continue
+        find "$root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; \
+            | grep -E '^[A-Za-z]+[0-9]{4}\.[0-9]+$' \
+            | sed -E 's/^([A-Za-z]+)([0-9]{4}\.[0-9]+)$/\1 \2/' \
+            | sort -k1,1 -k2,2V \
+            | awk -v r="$root" '$1 == prev {print r "/" prev prevv} {prev = $1; prevv = $2}'
+    done
+}
+
+old_logs() {
+    [[ -d "$HOME/Library/Logs" ]] || return 0
+    find "$HOME/Library/Logs" -type f -mtime +"$LOG_AGE_DAYS" 2>/dev/null
+}
+
+# docker volume prune only spares named volumes from API 1.42 (Docker 23) on;
+# older engines remove every unused volume, databases included.
+docker_safe_volume_prune() {
+    local api
+    api=$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null) || return 1
+    awk -v v="$api" 'BEGIN {split(v, p, "."); exit !(p[1] > 1 || (p[1] == 1 && p[2] >= 42))}'
+}
+
+docker_anon_volume_kb() {
+    docker system df -v 2>/dev/null \
+        | awk '/^VOLUME NAME/ {f = 1; next} /^$/ || /^Build cache/ {f = 0}
+             f && length($1) == 64 && $1 ~ /^[0-9a-f]+$/ && $2 == 0 {print $3}' \
+        | docker_size_to_kb
+}
+
+docker_build_cache_kb() {
+    docker system df --format '{{.Type}}|{{.Reclaimable}}' 2>/dev/null \
+        | awk -F'|' '$1 == "Build Cache" {split($2, a, " "); print a[1]}' \
+        | docker_size_to_kb
+}
+
+label() {
+    case "$1" in
+        jetbrains) echo "JetBrains old versions" ;;
+        uv) echo "uv cache" ;;
+        npm) echo "npm cache" ;;
+        precommit) echo "pre-commit envs" ;;
+        brew) echo "Homebrew downloads" ;;
+        docker) echo "Docker build cache + anon vols" ;;
+        logs) echo "Logs > ${LOG_AGE_DAYS} days" ;;
+    esac
+}
+
+# probe_<target>: print reclaimable KB, or return 1 when the target is unavailable.
+probe_jetbrains() {
+    local paths=() p
+    while IFS= read -r p; do paths+=("$p"); done < <(jetbrains_stale)
+    kb_of ${paths[@]+"${paths[@]}"}
+}
+probe_uv() {
+    command -v uv >/dev/null 2>&1 || return 1
+    kb_of "$(uv cache dir 2>/dev/null)"
+}
+probe_npm() {
+    command -v npm >/dev/null 2>&1 || return 1
+    kb_of "$(npm config get cache 2>/dev/null)/_cacache"
+}
+probe_precommit() {
+    command -v pre-commit >/dev/null 2>&1 || return 1
+    kb_of "${PRE_COMMIT_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/pre-commit}"
+}
+probe_brew() {
+    command -v brew >/dev/null 2>&1 || return 1
+    kb_of "$(brew --cache 2>/dev/null)"
+}
+probe_docker() {
+    command -v docker >/dev/null 2>&1 || return 1
+    docker info >/dev/null 2>&1 || return 1
+    local build anon=0
+    build=$(docker_build_cache_kb)
+    docker_safe_volume_prune && anon=$(docker_anon_volume_kb)
+    echo $((build + anon))
+}
+probe_logs() {
+    local paths=() p
+    while IFS= read -r p; do paths+=("$p"); done < <(old_logs)
+    kb_of ${paths[@]+"${paths[@]}"}
+}
+
+clean_jetbrains() {
+    local p
+    while IFS= read -r p; do rm -rf "$p"; done < <(jetbrains_stale)
+}
+clean_uv() { uv cache clean >/dev/null 2>&1; }
+clean_npm() { npm cache clean --force >/dev/null 2>&1; }
+clean_precommit() { pre-commit clean >/dev/null 2>&1; }
+clean_brew() { brew cleanup -s --prune=all >/dev/null 2>&1; }
+clean_docker() {
+    docker builder prune -f >/dev/null 2>&1
+    if docker_safe_volume_prune; then
+        docker volume prune -f >/dev/null 2>&1
+    else
+        echo "  docker: engine older than API 1.42, skipped volume prune (would remove named volumes)"
+    fi
+}
+clean_logs() {
+    local p
+    while IFS= read -r p; do rm -f "$p"; done < <(old_logs)
+}
+
+avail_kb() { df -k "$HOME" | awk 'NR == 2 {print $4}'; }
+
+notify() {
+    [[ $NOTIFY -eq 1 ]] || return 0
+    osascript -e "display notification \"$1\" with title \"disk-cleanup\"" >/dev/null 2>&1 || true
+}
+
+echo "Reclaimable (dry run$([[ $APPLY -eq 1 ]] && echo ' → applying')):"
+total=0
+active=""
+for t in $TARGETS; do
+    if ! kb=$("probe_$t"); then
+        printf '  %-32s %8s\n' "$(label "$t")" "skipped"
+        continue
+    fi
+    [[ ${kb:-0} -gt 0 ]] || continue
+    printf '  %-32s %8s\n' "$(label "$t")" "$(human "$kb")"
+    total=$((total + kb))
+    active="$active $t"
+done
+printf '  %-32s %8s\n' "Total" "$(human "$total")"
+free_before=$(avail_kb)
+
+if [[ $APPLY -eq 0 ]]; then
+    echo "Free now: $(human "$free_before"). Run 'disk-cleanup --apply' to reclaim."
+    if [[ $total -ge $MIN_NOTIFY_KB ]]; then
+        notify "$(human "$total") reclaimable, $(human "$free_before") free. Run disk-cleanup --apply"
+    fi
+    exit 0
+fi
+
+for t in $active; do
+    echo "==> $(label "$t")"
+    "clean_$t"
+done
+free_after=$(avail_kb)
+freed=$((free_after - free_before))
+[[ $freed -lt 0 ]] && freed=0
+echo "Freed $(human "$freed"); free now $(human "$free_after")."
+notify "Freed $(human "$freed"), $(human "$free_after") free"

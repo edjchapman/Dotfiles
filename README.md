@@ -156,6 +156,7 @@ If nothing is wrong it says so and exits.
 | **Homebrew upgrades** (`brew upgrade && brew doctor && brew cleanup`) | Once per day, on first shell of the day | `brewlog` (or `tail ~/.cache/brewup.log`) |
 | Drift detection | Every new shell + 09:30 daily notification | Shell banner; `mac` to act |
 | Brew install tracking | Every interactive `brew install/uninstall/...` | Shell banner shows pending count; `mac` merges into `Brewfile.tmpl` |
+| Disk cleanup report (dry run, nothing deleted) | 1 Jan / Apr / Jul / Oct, 10:00 notification | `disk-cleanup` to review; `disk-cleanup --apply` to reclaim |
 | Weekly draft PR for stale external pins | Mondays | GitHub Actions: `update-externals` |
 | Monthly full-history secret scan | First of the month | GitHub Actions: `audit` |
 

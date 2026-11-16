@@ -3,13 +3,14 @@
 # Hash includes force re-run on plist edits:
 # {{ include "private_Library/LaunchAgents/com.user.chezmoi-drift.plist.tmpl" | sha256sum }}
 # {{ include "private_Library/LaunchAgents/com.user.chezmoi-brew-inbox.plist.tmpl" | sha256sum }}
+# {{ include "private_Library/LaunchAgents/com.user.disk-cleanup.plist.tmpl" | sha256sum }}
 
 set -euo pipefail
 
 # Ensure log dir exists for StandardOutPath/StandardErrorPath in every plist.
 mkdir -p "$HOME/Library/Logs"
 
-for label in com.user.chezmoi-drift com.user.chezmoi-brew-inbox; do
+for label in com.user.chezmoi-drift com.user.chezmoi-brew-inbox com.user.disk-cleanup; do
     plist="$HOME/Library/LaunchAgents/${label}.plist"
     if [[ ! -f "$plist" ]]; then
         echo "${label} plist missing at ${plist}; skipping launchctl load"
