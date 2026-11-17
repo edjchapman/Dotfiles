@@ -134,7 +134,7 @@ When you start working on files matching specific patterns, also load the releva
 
 ## Standups & daily logs
 
-Standups are **not** committed to this repo. They are delivered to the pinned GitHub issue [#114 — 📋 Standup & daily-log tracker](https://github.com/edjchapman/Dotfiles/issues/114), mirroring the [`claude-code-config`](https://github.com/edjchapman/claude-code-config) pattern (its issues #51/#52).
+Standups are **not** committed to this repo. They are delivered to the pinned GitHub issue [#114 — 📋 Standup & daily-log tracker](https://github.com/edjchapman/dotfiles/issues/114), mirroring the [`claude-code-config`](https://github.com/edjchapman/claude-code-config) pattern (its issues #51/#52).
 
 - The global `session-end.sh` hook still writes local scratch logs to `./standups/YYYY-MM-DD-log.md`, but `/standups/` is `.gitignore`d — those files never enter git.
 - Running `/standup` posts the report as a comment on issue #114. A scheduled cloud routine does the same on a cron.
