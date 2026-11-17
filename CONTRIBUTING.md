@@ -45,6 +45,7 @@ chezmoi execute-template \
 
 - Branch off `main`. Name branches descriptively (`feat-<short-name>`, `fix-<short-name>`, `docs-<short-name>`).
 - Commits inside the branch are throwaway — the PR squashes to one commit using the PR title and body. Write a Conventional Commits PR title (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`).
+- The PR title is also the changelog entry. [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`) builds `CHANGELOG.md` and the next version from merged titles: `feat:` bumps minor, `fix:` bumps patch, a `!` (`feat!:`) bumps major, and other types stay out of the changelog. Don't edit `CHANGELOG.md` by hand.
 - Resolve every inline review thread before merging — `required_conversation_resolution` is enabled.
 - The branch must be up to date with `main` before merge (`strict: true`). CI re-runs on the merge candidate.
 
