@@ -7,6 +7,10 @@
 > now outdated — `claude-code-config` is **not** a chezmoi external; it's an actively-developed
 > working clone symlinked into `~/.claude/` (see `CLAUDE.md` and `.claude/rules/chezmoi-config.md`).
 > The decision itself (rebrand, no rename) stands; this note preserves the record.
+>
+> **Update (2026-11):** the rejected alternative "Auto-generate the CHANGELOG" below was
+> reversed by [ADR-0005](0005-release-please-owns-releases.md) for releases after `2.1.0`.
+> The rest of this decision stands.
 
 ## Context
 

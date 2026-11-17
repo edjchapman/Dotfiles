@@ -10,6 +10,7 @@ graph TD
     B["ADR-0002<br/>age encryption"]
     C["ADR-0003<br/>machine-type templating"]
     D["ADR-0004<br/>rebrand for public showcase"]
+    E["ADR-0005<br/>release-please owns releases"]
 
     A --> B
     A --> C
@@ -17,23 +18,27 @@ graph TD
     A --> D
     B --> D
     C --> D
+    D --> E
 
     click A "0001-chezmoi-as-source-of-truth.md" "Read ADR-0001"
     click B "0002-age-encryption.md" "Read ADR-0002"
     click C "0003-machine-type-templating.md" "Read ADR-0003"
     click D "0004-rebrand-public-showcase.md" "Read ADR-0004"
+    click E "0005-release-please-owns-releases.md" "Read ADR-0005"
 
     classDef foundation fill:#eef2ff,stroke:#58a6ff,color:#1a1f36
     classDef encryption fill:#fff5d6,stroke:#a371f7,color:#1a1f36
     classDef templating fill:#e5f9ee,stroke:#3aa56d,color:#1a1f36
     classDef showcase fill:#fee5e5,stroke:#d05656,color:#1a1f36
+    classDef release fill:#e6f4fb,stroke:#2f8fb8,color:#1a1f36
     class A foundation
     class B encryption
     class C templating
     class D showcase
+    class E release
 ```
 
-Each ADR builds on its predecessors: encryption is a chezmoi-native primitive (so 0002 depends on 0001), `machine_type` templating leverages both (so 0003 depends on 0001+0002), and the rebrand decision was deferred until the foundation was mature (so 0004 depends on all three).
+Each ADR builds on its predecessors: encryption is a chezmoi-native primitive (so 0002 depends on 0001), `machine_type` templating leverages both (so 0003 depends on 0001+0002), the rebrand decision was deferred until the foundation was mature (so 0004 depends on all three), and release automation replaces the hand-written changelog the rebrand introduced (so 0005 depends on 0004).
 
 ## Index
 
@@ -41,6 +46,7 @@ Each ADR builds on its predecessors: encryption is a chezmoi-native primitive (s
 - [ADR-0002 — age encryption for secrets](0002-age-encryption.md) — why age over git-crypt, transcrypt, sops, or a separate password manager.
 - [ADR-0003 — machine-type templating](0003-machine-type-templating.md) — why `personal` / `work` as a single boolean rather than per-topic opt-in.
 - [ADR-0004 — rebrand for public showcase](0004-rebrand-public-showcase.md) — why the README, social preview, Pages site, and governance files were added in mid-2026; why no rename; why not flag as a template repository.
+- [ADR-0005 — release-please owns releases](0005-release-please-owns-releases.md) — why releases and `CHANGELOG.md` are generated from PR titles after `2.1.0`, reversing ADR-0004's hand-written changelog.
 
 ## When to write an ADR
 

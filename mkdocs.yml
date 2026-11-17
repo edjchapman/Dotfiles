@@ -259,6 +259,7 @@ nav:
           - 0002 — age encryption: decisions/0002-age-encryption.md
           - 0003 — machine-type templating: decisions/0003-machine-type-templating.md
           - 0004 — rebrand for public showcase: decisions/0004-rebrand-public-showcase.md
+          - 0005 — release-please owns releases: decisions/0005-release-please-owns-releases.md
     - Reference:
           - Cheatsheet: cheatsheet.md
           - Troubleshooting: troubleshooting.md
