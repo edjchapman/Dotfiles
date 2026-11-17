@@ -36,8 +36,14 @@
 # byte-at-a-time, so each prompt takes exactly the next line — provided a
 # writer keeps the write end open, or the buffered data is discarded the
 # moment the reader closes between prompts. Hence the background holder: it
-# writes all answers up front, then holds the write end for 60s — a window
+# writes all answers up front, then holds the fifo open for 60s — a window
 # for the whole run, not per prompt, so it must cover a slow machine.
+#
+# The holder opens the fifo read-write, not write-only, so that it is its own
+# reader. bash writes one line per write(), and a write that lands while the
+# script is between prompts (read end closed) is SIGPIPE: a write-only holder
+# died there, taking the unwritten answers with it, and the next prompt hung
+# as below. That was a ~1-in-300 suite hang under load.
 #
 # The holder must never simply exit: opening a fifo for reading with no
 # writer blocks forever rather than returning EOF, so the next prompt after
@@ -54,12 +60,12 @@ feed_tty() {
     shift
     mkfifo "$fifo"
     {
-        {
-            printf '%s\n' "$@"
-            # sleep's stdout is detached from the fifo so that killing the
-            # holder releases the write end at once, not when sleep finishes.
-            sleep 60 >/dev/null
-        } >"$fifo"
+        exec 9<>"$fifo"
+        printf '%s\n' "$@" >&9
+        # sleep must not inherit the fifo, so that killing the holder
+        # releases it at once, not when sleep finishes.
+        sleep 60 >/dev/null 9>&-
+        exec 9>&-
         while :; do : >"$fifo"; done
     } 2>/dev/null 3>&- &
     # shellcheck disable=SC2034  # consumed by the callers' teardowns (cross-file)
