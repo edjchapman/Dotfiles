@@ -32,11 +32,16 @@
 	# current HEAD. The default branch is derived from origin/HEAD (falling back
 	# to the current branch) so this works in main- and master-based repos alike
 	# — sync is a global alias run in every repo.
+	#
+	# The update step merges the upstream ref the fetch just wrote rather than
+	# running `git pull`: pull fetches a second time and reads FETCH_HEAD, which
+	# a concurrent fetch in the same clone (an IDE's background fetch) leaves
+	# with two for-merge lines — "Cannot rebase onto multiple branches".
 	sync = "!f() { \
 		d=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@'); \
 		git fetch --all --prune && \
 		git branch -vv | awk '/: gone]/ && $1 != \"*\" {print $1}' | xargs -r -n1 git branch -D; \
-		git pull --ff-only --autostash && \
+		git merge --ff-only --autostash @{u} && \
 		git branch --merged \"${d:-HEAD}\" | grep -vE '^\\*|^\\s*(main|master)$' | xargs -r -n1 git branch -d; \
 	}; f"
 [credential "https://github.com"]
