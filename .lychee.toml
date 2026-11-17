@@ -40,6 +40,10 @@ exclude = [
     # a PR 404 against main until merge. The PR diff itself proves the
     # files exist; lychee re-checking is redundant.
     "^https://github\\.com/edjchapman/dotfiles/(blob|edit|raw)/main/",
+    # release-please writes a compare link to the new tag into CHANGELOG.md
+    # in its release PR. The tag only exists once that PR merges, so the
+    # link 404s on every release PR.
+    "^https://github\\.com/edjchapman/dotfiles/compare/",
     # gnu.org/software/* reliably times out from GH runners (>30s+5retries).
     # The destination is genuine and stable; the path between is slow.
     "^https://www\\.gnu\\.org/",
