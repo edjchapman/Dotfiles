@@ -371,3 +371,23 @@ guard_raw() {
     run guard "git push && cd $OTHERREPO"
     [ "$status" -eq 2 ]
 }
+
+# ------------------------------------------------------------------------------
+# The block message tells the agent what to do next
+# ------------------------------------------------------------------------------
+
+@test "every block tells the agent to stop and ask, not to find another route" {
+    # A refused `git push --delete` was once completed through `gh api`
+    # instead. The instruction lives in the message, not in always-loaded
+    # context, so it arrives at the moment the guard fires. The Codex hook is
+    # a symlink to the same file today; checking it too keeps that true if it
+    # ever becomes a copy.
+    local hook
+    for hook in "$GUARD" "$REPO_ROOT/.codex/hooks/guard-destructive.sh"; do
+        GUARD=$hook
+        run guard 'chezmoi apply'
+        [ "$status" -eq 2 ]
+        [[ "$output" == *"stop and ask the user"* ]]
+        [[ "$output" == *"another route"* ]]
+    done
+}

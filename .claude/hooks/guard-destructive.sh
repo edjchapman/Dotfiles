@@ -124,6 +124,9 @@ block() {
     printf 'BLOCKED by .claude/hooks/guard-destructive.sh\n\n%s\n' "$1" >&2
     # shellcheck disable=SC2016  # the backticks here are literal prose, not expansion
     printf '\nIf the phrase appears only as text (a commit message, a doc, an echo) and\nnot as a command, put the text in a file and pass it by path — e.g.\n`git commit -F <path>` rather than inline. Heredoc bodies are already exempt\nunless something in the command could execute them.\n' >&2
+    # Said here rather than in CLAUDE.md so it arrives when the guard fires: a
+    # refused branch delete was once completed through the GitHub API instead.
+    printf '\nOtherwise stop and ask the user. Do not reach the same outcome by\nanother route (gh api, git clean, a script file), even for an action they\nrequested.\n' >&2
     exit 2
 }
 
