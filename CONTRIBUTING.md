@@ -55,6 +55,6 @@ chezmoi execute-template \
 - [`CLAUDE.md`](CLAUDE.md) — agent brief: full command reference, dangerous-ops list, template vars.
 - [`AGENTS.md`](AGENTS.md) — short brief for non-Claude agents.
 - [`docs/runbooks/`](docs/runbooks) — new-machine bootstrap, secret rotation, drift recovery, brew sync, branch protection.
-- [`docs/decisions/`](docs/decisions) — architecture decision records (chezmoi choice, age encryption, machine-type templating, public-showcase rebrand).
+- [`docs/decisions/`](docs/decisions) — architecture decision records (chezmoi choice, age encryption, machine-type templating, public-showcase rebrand, release automation).
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community expectations.
