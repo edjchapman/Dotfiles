@@ -1,0 +1,53 @@
+---
+name: Release
+
+# release-please keeps one draft release PR open against main. It bumps the
+# version and prepends CHANGELOG.md from the Conventional Commits PR titles
+# merged since the last release (`feat` -> minor, `fix` -> patch, `!` -> major).
+# Merging that PR is the release: the next run tags it and publishes the GitHub
+# release. Nothing auto-merges.
+#
+# Token: prefers `BOT_PAT`. A release PR opened with GITHUB_TOKEN never triggers
+# CI (GitHub's anti-recursion guard), so under the fallback its required checks
+# stay pending until someone runs `gh run rerun <id>`.
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+# Two runs racing would both try to force-push the release branch.
+concurrency:
+    group: release-please
+    cancel-in-progress: false
+
+jobs:
+    release-please:
+        name: Maintain release PR and publish releases
+        runs-on: ubuntu-latest
+        steps:
+            - name: Verify BOT_PAT is usable
+              # Same guard as update-externals.yml: an expired PAT otherwise
+              # fails with an error that names neither the token nor the secret.
+              env:
+                  BOT_PAT: ${{ secrets.BOT_PAT }}
+              run: |
+                  if [ -z "${BOT_PAT:-}" ]; then
+                      echo "BOT_PAT unset - falling back to GITHUB_TOKEN."
+                      exit 0
+                  fi
+                  if ! GH_TOKEN="$BOT_PAT" gh api "repos/$GITHUB_REPOSITORY" --silent; then
+                      echo "::error::BOT_PAT is set but GitHub rejected it (expired or revoked). Rotate it at Settings > Secrets and variables > Actions > BOT_PAT, or delete the secret to fall back to GITHUB_TOKEN."
+                      exit 1
+                  fi
+                  echo "BOT_PAT accepted."
+
+            - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
+              with:
+                  token: ${{ secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
+                  config-file: .github/release-please-config.json
+                  manifest-file: .github/.release-please-manifest.json
