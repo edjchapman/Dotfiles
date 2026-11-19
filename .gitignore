@@ -14,6 +14,9 @@ bin/
 site/
 .cache/
 
+# Written by a local lychee run (`cache = true` in .lychee.toml)
+.lycheecache
+
 # Local Python venvs for docs work
 .venv*/
 
