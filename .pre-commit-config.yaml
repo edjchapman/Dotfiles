@@ -55,7 +55,7 @@ repos:
           - id: codespell
             additional_dependencies: [tomli]
             files: '\.(md|yml|yaml|toml|py|sh)$'
-            exclude: '^(site/|assets/demo/|.*\.lock$)'
+            exclude: '^(site/|.*\.lock$)'
 
     - repo: local
       hooks:
