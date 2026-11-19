@@ -129,7 +129,7 @@ jobs:
               with:
                   check_filenames: true
                   check_hidden: true
-                  skip: ./.git,./site,./node_modules,./assets/demo/*.tape,*.svg,*.png,*.lock
+                  skip: ./.git,./site,./node_modules,*.svg,*.png,*.lock
 
     mermaid-render:
         name: mermaid syntax check
