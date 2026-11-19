@@ -18,8 +18,9 @@ Read [`CLAUDE.md`](CLAUDE.md) — it's the agent brief, but the same rules apply
 Every PR must pass [12 CI checks](docs/runbooks/branch-protection.md) on `main`. Reproduce them locally before pushing:
 
 ```bash
-make ci          # lint, fmt-check, verify-templates matrix, test-bats, audit
-chezmoi diff     # preview what would change in $HOME
+make ci                      # lint, fmt-check, verify-templates matrix, test-bats, audit
+pre-commit run --all-files   # the hooks make ci skips: yamllint, markdownlint, codespell, docs and mirror checks
+chezmoi diff                 # preview what would change in $HOME
 ```
 
 If `chezmoi diff` shows files you didn't intend to touch, stop and investigate — `.chezmoiignore` is probably missing an entry. Per [`.claude/rules/chezmoi-config.md`](.claude/rules/chezmoi-config.md), every new top-level repo-metadata file (docs, CI config, lint config, governance) must be added to `.chezmoiignore` so it doesn't deploy to `$HOME`.
@@ -45,7 +46,7 @@ chezmoi execute-template \
 
 - Branch off `main`. Name branches descriptively (`feat-<short-name>`, `fix-<short-name>`, `docs-<short-name>`).
 - Commits inside the branch are throwaway — the PR squashes to one commit using the PR title and body. Write a Conventional Commits PR title (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`).
-- The PR title is also the changelog entry. [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`) builds `CHANGELOG.md` and the next version from merged titles: `feat:` bumps minor, `fix:` bumps patch, a `!` (`feat!:`) bumps major, and other types stay out of the changelog. Don't edit `CHANGELOG.md` by hand.
+- The PR title is also the changelog entry. [release-please](https://github.com/googleapis/release-please) (`.github/workflows/release-please.yml`) builds `CHANGELOG.md` and the next version from merged titles: `feat:` bumps minor, `fix:` bumps patch, a `!` (`feat!:`) bumps major. `security:`, `perf:` and `revert:` titles also appear in the changelog; every other type is hidden. Don't edit `CHANGELOG.md` by hand.
 - Resolve every inline review thread before merging — `required_conversation_resolution` is enabled.
 - The branch must be up to date with `main` before merge (`strict: true`). CI re-runs on the merge candidate.
 
@@ -54,7 +55,7 @@ chezmoi execute-template \
 - [`README.md`](README.md) — what the repo is, why it exists, how to bootstrap a Mac.
 - [`CLAUDE.md`](CLAUDE.md) — agent brief: full command reference, dangerous-ops list, template vars.
 - [`AGENTS.md`](AGENTS.md) — short brief for non-Claude agents.
-- [`docs/runbooks/`](docs/runbooks) — new-machine bootstrap, secret rotation, drift recovery, brew sync, branch protection.
+- [`docs/runbooks/`](docs/runbooks) — forking, new-machine bootstrap, secret rotation, drift recovery, brew sync, branch protection, and more.
 - [`docs/decisions/`](docs/decisions) — architecture decision records (chezmoi choice, age encryption, machine-type templating, public-showcase rebrand, release automation).
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community expectations.

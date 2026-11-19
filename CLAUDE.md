@@ -28,7 +28,7 @@ The golden rule: **always preview before mutating**.
 | `chezmoi add --encrypt <path>` | Add or rotate a secret. **Never use plain `chezmoi add` for secrets.** |
 | `make ci` | Before any commit/push. Lint, fmt-check, verify-templates matrix, test-bats, audit. |
 
-`mac` is an alias for `chezmoi-fix` (defined in `dot_zshrc`). Other helpers (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi execute-template`, `chezmoi verify`, `chezmoi doctor`, `chezmoi re-add`) remain on PATH for specialised tasks; reach for them when `mac` doesn't fit.
+`mac` is an alias for `chezmoi-fix` (defined in `dot_zshrc`). Other helpers (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi execute-template`, `chezmoi verify`, `chezmoi doctor`, `chezmoi re-add`) remain on PATH for specialised tasks; reach for them when `mac` doesn't fit. Two helpers are unrelated to drift: `disk-cleanup` (reclaimable-space report) and `net-check` (network snapshot).
 
 ## Dangerous operations — agents must NOT do these without explicit user approval
 
@@ -39,6 +39,8 @@ The golden rule: **always preview before mutating**.
 - **Push to `main`.** All changes go via PR. `main` is protected: all 12 CI checks must pass, only squash-merges allowed, branches auto-deleted on merge. See [`docs/runbooks/branch-protection.md`](docs/runbooks/branch-protection.md). Self-update workflows open draft PRs only.
 - **Run `sudo` commands** outside of `run_once_after_05-macos-sudo.sh`. The sudo script is one-time machine bootstrap, not agent territory.
 - **Bypass pre-commit hooks** (`git commit --no-verify`). The hooks exist to stop secret leaks.
+
+If `.claude/hooks/guard-destructive.sh` blocks a command, stop and ask the user. Do not reach the same outcome by another route (`gh api`, `git clean`, a script file).
 
 ## Template variables
 
@@ -65,18 +67,25 @@ chezmoi execute-template \
 ```text
 .
 ├── CLAUDE.md, AGENTS.md, README.md   # docs (not deployed)
+├── CONTEXT.md                        # design glossary (not deployed)
 ├── docs/                             # runbooks + ADRs (not deployed)
 ├── .claude/                          # project-scoped Claude Code config (not deployed)
-├── .github/workflows/                # ci.yml, update-*.yml, audit.yml
+├── .agents/, .codex/                 # Codex mirror of .claude/ (not deployed)
+├── .github/workflows/                # ci, docs, pages, preview, release-please, update-*, audit, auto-rebase, scheduled-check
 ├── Makefile                          # `make help` lists targets (not deployed)
+├── scripts/, tests/                  # repo guards and bats tests (not deployed)
 ├── .chezmoi.toml.tmpl                # init prompts: machine_type, gpg key
 ├── .chezmoiexternal.toml             # pinned externals: oh-my-zsh
 ├── .chezmoiignore                    # what stays in source, never deployed
+├── .chezmoitemplates/                # shared template partials (brew-prefix)
 ├── Brewfile.tmpl                     # consumed by run_onchange_02, not deployed directly
 ├── dot_*                             # files deployed to $HOME (e.g. dot_zshrc → ~/.zshrc)
+├── dot_local/bin/                    # the helper commands (chezmoi-*, disk-cleanup, net-check)
+├── private_Library/LaunchAgents/     # drift, brew-inbox and disk-cleanup launchd jobs
+├── private_dot_gnupg/                # gpg-agent config
 ├── encrypted_private_*.age           # age-encrypted secrets (decrypt at apply time)
 ├── run_once_*                        # one-shot bootstrap scripts (Homebrew, sudo settings)
-└── run_onchange_*                    # re-runs when content hash changes (Brewfile, defaults, Dock)
+└── run_onchange_*                    # re-runs when content hash changes (Brewfile, defaults, Dock, login items, launchd, Claude symlinks)
 ```
 
 `run_onchange_after_07-claude-global-symlinks.sh` symlinks `~/.claude/{CLAUDE.md,settings.json,agents,commands,rules,skills}` to a separate repo (`claude-code-config`, an actively-developed working clone at `~/Development/claude-code-config`; the script clones it there on a fresh machine) by delegating to that repo's `scripts/setup-global.sh`. A run script is used because `.chezmoiignore` must ignore the target path `.claude` (to keep this repo's project-scoped `.claude/` out of `$HOME`), which rules out `symlink_*` source files for the same target. **Global** Claude Code config lives there. **Project-scoped** config (this file, `.claude/` in this repo) lives here.
@@ -94,8 +103,8 @@ chezmoi execute-template \
 
 ### Add a Homebrew package
 
-1. Edit `Brewfile.tmpl`. Group it under the right header (CLI / cask / vscode / mas).
-2. If it's personal-only (Steam, Tidal, crypto), wrap in `{{ if eq .machine_type "personal" }}…{{ end }}`.
+1. Edit `Brewfile.tmpl`. Group it under the right header (CLI Tools / one of the Desktop Apps groups / Mac App Store).
+2. If it's personal-only (Tidal, WhatsApp, crypto wallets), wrap in `{{ if eq .machine_type "personal" }}…{{ end }}`.
 3. `make verify-templates` — confirms templates still render for both machine types.
 4. `chezmoi diff` — should show only `Brewfile` change.
 5. `chezmoi apply` — `run_onchange_02-brew-bundle.sh.tmpl` re-runs because the file hash changed.
@@ -147,15 +156,15 @@ Standups are **not** committed to this repo. They are delivered to the pinned Gi
 - **Committing or trusting a rendered Brewfile.** `Brewfile.tmpl` is the source; every consumer (`run_onchange_02`, `chezmoi-drift-check`) renders it to a temp file on the fly. A persistent `~/Brewfile` is stale cruft from an old `brew bundle dump` — remove it rather than reading it as authoritative (see the drift runbook). `.chezmoiignore` keeps the target path `Brewfile` undeployed.
 - **Forgetting `--encrypt`.** `chezmoi add ~/.zshrc.local` (no flag) commits plaintext secrets. Always use `--encrypt` for any file containing credentials.
 - **ShellCheck false negatives in `.tmpl` files.** `scripts/strip-template-actions.sh` removes `{{…}}` before the Makefile pipes a template to ShellCheck (the bash-4-ism guard uses the same helper) — beware that template-only logic isn't actually checked. Keep the strip non-greedy; see `docs/gotchas.md`.
-- **`chezmoi apply` on a misconfigured template.** If a template renders to invalid shell, your `~/.zshrc` becomes broken and your next shell session may fail to start. Always `make verify-templates` and `chezmoi diff` first.
+- **`chezmoi apply` on a misconfigured template.** A template that renders to invalid output breaks whatever it deploys: a bad `dot_gitconfig.tmpl` breaks every `git` command, a bad `run_onchange_*.sh.tmpl` fails the apply partway. Always `make verify-templates` and `chezmoi diff` first.
 
 ## Self-checking and self-updating
 
 The user-facing summary is in [`README.md`](README.md) under "What runs automatically". Agent-relevant points:
 
-- Every commit runs shellcheck, shfmt, yamllint, markdownlint, gitleaks via `.pre-commit-config.yaml` + a local `make verify-templates` hook. ggshield scans once per push (global pre-push hook) to spare the shared GitGuardian quota.
+- Every commit runs shellcheck, shfmt, yamllint, markdownlint, gitleaks and codespell via `.pre-commit-config.yaml`, plus local hooks: `make verify-templates-quick` (one render — CI runs the matrix), the bash-3.2 guard, the docs gates, and the Codex-mirror check. `make ci` does not run these hooks. ggshield scans once per push (global pre-push hook) to spare the shared GitGuardian quota.
 - Every push runs the same checks plus a 4-cell template matrix and a macOS `brew bundle check` in CI (`.github/workflows/ci.yml`).
 - Releases are cut by `release-please.yml`: it keeps one draft release PR open (version bump + `CHANGELOG.md`), and merging that PR tags and publishes. **Never hand-edit `CHANGELOG.md`** — the squash-merged PR title is the changelog entry, so only `feat`, `fix`, `security`, `perf` and `revert` titles appear or trigger a release.
-- Weekly draft PR from `update-externals.yml`; monthly full-history scan from `audit.yml`. **Nothing auto-merges. Nothing auto-applies.** Brew currency is tracked on the live machine by the daily `brewup` background task, not in CI — a fresh runner has no installed-version state to compare against.
+- Weekly draft PRs from `update-externals.yml`, `update-precommit.yml` and `update-mas.yml`; monthly full-history scan from `audit.yml`. **Nothing auto-merges. Nothing auto-applies.** Brew currency is tracked on the live machine by the daily `brewup` background task, not in CI — a fresh runner has no installed-version state to compare against.
 - `update-externals.yml` PRs the `oh-my-zsh` SHA pin — the only chezmoi external. `claude-code-config` is **not** an external: it's an actively-developed working clone at `~/Development/claude-code-config` (bootstrapped by `run_onchange_after_07` on a fresh machine), and updates flow through the normal git workflow in that repo — a git-repo external would `git pull --rebase` into a dirty working tree at apply time and fail.
 - On the live machine: `mac` (= `chezmoi-fix`) is the user-facing remediation entry point. Its menu covers every drift direction: **apply** (source wins — diff paged, single confirm), **backup** (target wins — walks each drifted file with apply / re-add / skip; template-backed targets are routed to their source `.tmpl` and secrets go through `chezmoi add --encrypt`), and **brew-extra resolution** (per-package adopt-into-Brewfile / uninstall / skip; adopt synthesizes a journal event via `chezmoi-brew-record` and hands off to `chezmoi-brew-sync`). Every mutating path refreshes the drift cache on exit — the cache is refreshed *before* the menu renders, so without that the banner would keep reporting the drift the user just fixed for up to `CHEZMOI_DRIFT_TTL` (4h). The shell banner is a single line naming each firing signal (`chezmoi: home 2 · brew-extra 5 · inbox 3 — run 'mac'`); the drift state file carries `BREW_EXTRA_NAMES` alongside the counts. The full helper set (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi-brew-record`) remains on PATH for power use. The daily `brewup` background task (in `dot_zshrc`) appends to `~/.cache/brewup.log`. See [`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md).

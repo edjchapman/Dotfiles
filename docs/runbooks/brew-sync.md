@@ -23,7 +23,7 @@ sequenceDiagram
     R->>J: append NDJSON event
     U->>U: new shell session
     J->>B: read pending count
-    B-->>U: "1 brew event(s) pending"
+    B-->>U: "chezmoi: inbox 1 — run 'mac'"
     U->>S: chezmoi-brew-sync
     S->>J: read events
     S->>S: dedup (install ⨯ uninstall cancel)
@@ -45,7 +45,7 @@ sequenceDiagram
 | `brew()` / `mas()` wrappers | `dot_zshrc` | After the real command exits, call `chezmoi-brew-record` async. Never alter the user-visible exit code. |
 | `chezmoi-brew-record` | `~/.local/bin/` | Append one NDJSON line per package to the journal. Skips failed installs (`rc != 0`). |
 | Journal | `~/.cache/chezmoi-brew-inbox/journal.ndjson` | Append-only NDJSON. One line per event. Truncated by `chezmoi-brew-sync` on confirmed merge. |
-| Shell banner | `dot_zshrc` | Reads the journal on shell startup and prints "N brew event(s) pending — run chezmoi-brew-sync". Switches to red at ≥10 events. |
+| Shell banner | `dot_zshrc` | Counts the journal's lines on shell startup and adds an `inbox N` segment to the drift banner (`chezmoi: inbox 3 — run 'mac'`). Switches to red at ≥10 events. |
 | Weekly notification | `com.user.chezmoi-brew-inbox.plist` | Posts a macOS notification every Monday 09:30 if the journal is non-empty. Prevents silent accumulation. |
 | `chezmoi-brew-sync` | `~/.local/bin/` | Interactive merge. Reads journal, dedupes install/uninstall pairs, prompts for placement, validates, shows diff, replaces `Brewfile.tmpl` atomically. |
 
@@ -57,8 +57,9 @@ $ brew install ffmpeg
 
 # Next shell session:
 $ zsh
-chezmoi: 1 brew event(s) pending — run chezmoi-brew-sync
+chezmoi: inbox 1 — run 'mac'
 
+# `mac` offers the merge as a menu entry; or run it directly:
 $ chezmoi-brew-sync
 ==> chezmoi-brew-sync — 1 pending action(s)
 
@@ -125,6 +126,14 @@ Next: run 'chezmoi diff' then 'chezmoi apply' to install.
 
 Shell banner turns red at ≥10. Run `chezmoi-brew-sync` and walk through them. The dedup step usually collapses a lot — `brew install foo && brew uninstall foo` produces zero net actions.
 
+### I want to see what is pending without being prompted
+
+```bash
+chezmoi-brew-sync --plan
+```
+
+Prints one tab-separated line per action the interactive flow would offer (`add` or `remove`, kind, name, suggested section, whether it lands in a conditional), then exits. It reads the journal and `Brewfile.tmpl` only: no prompts, no lock, no writes. `--dry-run` is different — it walks the full interactive flow, then stops before editing.
+
 ### "no tty available"
 
 `chezmoi-brew-sync` must run from an interactive terminal — it prompts via `/dev/tty`. Cron/launchd cannot run it; the weekly launchd notification only **reminds** the user to run sync interactively.
@@ -149,7 +158,6 @@ The proposed file is kept at the temp path the script prints. Inspect it, fix `B
 
 - It does not auto-edit `Brewfile.tmpl` from the shell. The wrapper is a recorder; only `chezmoi-brew-sync` writes to the file.
 - It does not handle `brew upgrade` events — version pinning is not modelled in `Brewfile.tmpl` (the file describes "what should be installed", not "at what version").
-- It does not handle VS Code extensions installed inside VS Code — those are managed separately by the weekly `update-vscode.yml` workflow draft PR.
 - It does not auto-commit the resulting `Brewfile.tmpl` change. Run `chezmoi diff` and `git commit` yourself.
 
 ## See also

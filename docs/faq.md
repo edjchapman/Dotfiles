@@ -6,13 +6,10 @@ Full reasoning in [ADR-0001](decisions/0001-chezmoi-as-source-of-truth.md). In o
 
 ## How do I bootstrap a clean Mac with this repo?
 
-Full procedure: [`docs/runbooks/new-machine.md`](runbooks/new-machine.md). Short version: drop your age private key in `~/.config/chezmoi/key.txt`, then:
+It depends whose Mac it is:
 
-```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply edjchapman
-```
-
-(Replace `edjchapman` with your own fork's owner.)
+- **Yours** — the repo's secrets are encrypted to the maintainer's key, so `init --apply edjchapman` fails at the decrypt step for anyone else. Fork it first: [Fork this repo](runbooks/fork.md).
+- **The maintainer's** — place the age private key in `~/.config/chezmoi/key.txt`, then run the one-liner in [New machine bootstrap](runbooks/new-machine.md).
 
 ## What happens if I lose my age key?
 
@@ -20,12 +17,9 @@ The `*.age` blobs in the repo become undecryptable. The underlying secrets (AWS 
 
 ## Can I fork this for my own use?
 
-Yes, with two caveats:
+Yes. Five things are specific to the maintainer and must change first: the age recipient, the two encrypted blobs, the git identity, the Claude Code config clone, and the personal Brewfile entries. [Fork this repo](runbooks/fork.md) walks through each.
 
-1. The age recipient in `.chezmoi.toml.tmpl` is mine. You'll need to generate your own keypair (`age-keygen -o ~/.config/chezmoi/key.txt`) and create your own `*.age` blobs from scratch — you can't decrypt mine.
-2. `Brewfile.tmpl` includes personal-only entries gated on `{{ if eq .machine_type "personal" }}` (Steam, Tidal, etc.). Strip or replace what doesn't apply.
-
-The right fork pattern is **clone → adapt → re-encrypt with your key**, not "template-instantiate". That's why this repo is not flagged as a template repository — see [ADR-0004](decisions/0004-rebrand-public-showcase.md).
+The right fork pattern is **fork → adapt → re-encrypt with your key**, not "template-instantiate". That's why this repo is not flagged as a template repository — see [ADR-0004](decisions/0004-rebrand-public-showcase.md).
 
 ## Does this work on Linux?
 
@@ -33,11 +27,12 @@ Not by design. The repo assumes macOS: `brew`, `defaults write`, `dockutil`, `ma
 
 ## How does drift detection work?
 
-Three layers:
+`chezmoi-drift-check` measures five drift signals (`$HOME` files, missing brew packages, extra brew packages, macOS defaults, security baseline) and writes them to a cache. Four triggers re-run it:
 
-1. **Every shell startup**: a banner runs `chezmoi-drift-check` and reports if any of (`$HOME` files, Brewfile, macOS defaults, security baseline, external pins) is out of sync.
-2. **Daily at 09:30**: a LaunchAgent (`com.user.chezmoi-drift.plist.tmpl`) fires `chezmoi-fix --alert`, which produces a clickable macOS notification.
-3. **On demand**: typing `mac` runs the same check, summarises what's drifted, and walks you through fixing each source.
+1. **Every shell startup**: the banner reads the cache and names what is pending; if the cache is older than 4 hours, a refresh runs in the background.
+2. **Daily at 09:30**: a LaunchAgent (`com.user.chezmoi-drift`) runs the full check and posts a macOS notification if there is drift.
+3. **After `brew`, `mas` and `chezmoi apply`**: shell wrappers refresh the cache so the banner reflects what you just did.
+4. **On demand**: typing `mac` runs the same check, summarises what's drifted, and walks you through fixing each source.
 
 Full story: [`docs/runbooks/recover-from-drift.md`](runbooks/recover-from-drift.md).
 

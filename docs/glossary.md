@@ -7,7 +7,7 @@ tags:
 
 # Glossary
 
-Terminology used across this site. Definitions are operational — what the term means *in this repo*, not necessarily its broadest sense.
+Terminology used across this site. Definitions are operational — what the term means *in this repo*, not necessarily its broadest sense. The design vocabulary behind the drift system is defined in [`CONTEXT.md`](https://github.com/edjchapman/dotfiles/blob/main/CONTEXT.md), which wins if the two ever disagree.
 
 ## Tooling
 
@@ -21,13 +21,10 @@ Homebrew
 :   macOS package manager. Packages declared in `Brewfile.tmpl`, installed by `run_onchange_02-brew-bundle.sh.tmpl` at apply time.
 
 LaunchAgent
-:   macOS user-level scheduled job manager (`launchd`'s per-user surface). The daily drift check fires via a LaunchAgent at 09:30.
+:   A per-user job scheduled by macOS's `launchd`. Three run here: the daily drift check (09:30), the weekly brew-inbox reminder (Mondays 09:30) and the quarterly disk-cleanup report.
 
 mas
 :   Mac App Store CLI. Used in `Brewfile.tmpl` for store apps that aren't on Homebrew.
-
-vhs
-:   Terminal recording tool (Charm). The repo's demo `.gif` is rendered from `assets/demo/bootstrap.tape`.
 
 ## Concepts
 
@@ -37,14 +34,23 @@ age key
 apply
 :   The `chezmoi apply` operation: render templates, decrypt blobs, diff against `$HOME`, execute scripts, materialise the target state.
 
+audit protocol
+:   The contract `chezmoi-defaults-audit` and `chezmoi-security-audit` both honour so the drift check reads them the same way: one quiet run prints how many checks passed, drifted and were skipped, and the exit code tells "found drift" apart from "could not run". Detail in [Recover from drift](runbooks/recover-from-drift.md#audit-protocol).
+
 dotfile
 :   A configuration file in `$HOME` whose name starts with `.` (e.g. `.zshrc`, `.gitconfig`). Stored in the source as `dot_zshrc`, `dot_gitconfig.tmpl`, etc.
 
 drift
-:   Any divergence between the source state and `$HOME`. Detected by three concurrent signals (shell banner, LaunchAgent, brew wrapper). Remediated by `mac`.
+:   Any divergence between the source state and the machine. Reported as drift signals, re-measured on drift triggers, remediated by `mac`.
+
+drift signal
+:   A named count of what differs in one area: `home` (files), `brew-missing`, `brew-extra`, `defaults`, `security`. These are the segments of the shell banner.
+
+drift trigger
+:   An event that re-measures the drift signals: a new shell finding the cache older than 4 hours, the 09:30 LaunchAgent, a `brew` / `mas` / `chezmoi apply` command finishing, or running `mac`. Triggers decide *when*; signals say *what*.
 
 external
-:   A dependency pulled in from outside the repo at apply time. Defined in `.chezmoiexternal.toml`. Pinned by SHA (archive) or rebased (git-repo).
+:   A dependency pulled in from outside the repo at apply time. Defined in `.chezmoiexternal.toml` and pinned by SHA.
 
 idempotent
 :   A script that produces the same result no matter how many times it runs. Required for every `run_once_*` and `run_onchange_*` script in the repo.
@@ -70,6 +76,9 @@ run_onchange
 source state
 :   The contents of this repo. The "intended" `$HOME`. Compared against `$HOME` to detect drift.
 
+taint domain
+:   A group of drift signals whose checks share one substrate, so a failure in any one check makes every count in the group untrustworthy and all of them are suppressed. The two brew signals form one taint domain; `home`, `defaults` and `security` each stand alone.
+
 target state
 :   What `$HOME` would look like if `chezmoi apply` were run right now. Computed from the source state.
 
@@ -77,7 +86,7 @@ template
 :   A `*.tmpl` file processed by Go's `text/template` at apply time. Has access to `machine_type`, `gpg_signing_key`, `chezmoi.arch`, `chezmoi.homeDir`, etc.
 
 verify
-:   `chezmoi verify` — silent if `$HOME` matches the target state. Used in `make ci` for drift detection.
+:   `chezmoi verify` — silent if `$HOME` matches the target state. Run by `make test`.
 
 ## Commands
 
@@ -97,7 +106,13 @@ chezmoi-defaults-audit
 :   Walks `run_onchange_03-macos-defaults.sh` and compares declared values against the live machine. Reports drift.
 
 chezmoi-security-audit
-:   Checks FileVault, SIP, firewall, age key file mode (`0600`), and a few related security baselines.
+:   Read-only check of the security baseline: FileVault, SIP, Gatekeeper, firewall and stealth mode, guest account, auto-login, remote access, sensitive file modes (including the age key's `0600`), SSH key passphrases, GPG key expiry, auto-update and energy settings, pending macOS updates, and that NordVPN's `Shield` extension is off.
+
+disk-cleanup
+:   Reports the disk space held by caches that rebuild themselves (package-manager caches, superseded JetBrains directories, Docker build cache, old logs). Deletes nothing unless run with `--apply`.
+
+net-check
+:   Prints router ping, internet ping and an HTTPS timing on one line, to compare before and after a change. `--watch` samples for 30 minutes. See [Network slowdowns](runbooks/network-slowdowns.md).
 
 ## Filesystem locations
 

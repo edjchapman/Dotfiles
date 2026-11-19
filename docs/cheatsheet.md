@@ -1,6 +1,6 @@
 ---
 title: Cheatsheet
-description: One-page printable command reference for chezmoi, the mac drift helper, brew sync, age operations, and the git/PR workflow.
+description: One-page printable command reference for chezmoi, the mac drift helper, maintenance, brew sync, age operations, and the git/PR workflow.
 tags:
     - reference
 ---
@@ -13,11 +13,19 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 
 | Goal | Command |
 |---|---|
-| Refresh drift cache + summary + walk through fix | `mac` |
-| Same as above (full name) | `chezmoi-fix` |
-| Just show drift state, no fix | `chezmoi-drift-check` |
+| Refresh drift cache + summary + walk through fix | `mac` (alias for `chezmoi-fix`) |
+| Print the pending menu from the cache — no refresh, no prompt | `mac --menu` |
+| Re-run every check and show drift state, no fix | `chezmoi-drift-check --full` |
 | Drop drift cache and start fresh | `rm -rf ~/.cache/chezmoi-drift` |
-| Click drift notification → opens terminal at `mac` | (automatic from the daily LaunchAgent) |
+
+## Maintenance
+
+| Goal | Command |
+|---|---|
+| Run the daily Homebrew upgrade now | `brewup` |
+| Follow today's upgrade output | `brewlog` |
+| Report reclaimable disk space (deletes nothing) | `disk-cleanup` |
+| Reclaim it | `disk-cleanup --apply` |
 
 ## Network
 
@@ -33,6 +41,7 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 | Preview every change `apply` would make | `chezmoi diff` |
 | Apply | `chezmoi apply` |
 | Apply a single file | `chezmoi apply ~/.zshrc` |
+| Pull the source repo and apply | `chezmoi update` |
 | Silent if no drift; report drift if any | `chezmoi verify` |
 | Capture an edited file in `$HOME` back to source | `chezmoi re-add <path>` |
 | Add a NEW file as encrypted | `chezmoi add --encrypt <path>` |
@@ -49,10 +58,10 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 
 | Goal | Command |
 |---|---|
-| Merge brew journal into `Brewfile.tmpl` | `chezmoi-brew-sync` |
-| Re-record current brew state (after manual fixes) | `chezmoi-brew-record` |
-| Inspect the journal | `cat ~/.cache/brewup.log` |
-| Drop the journal (lose pending entries) | `rm ~/.cache/brewup.log` |
+| Merge the brew inbox journal into `Brewfile.tmpl` | `chezmoi-brew-sync` |
+| List the pending actions as TSV — no prompts, no writes | `chezmoi-brew-sync --plan` |
+| Inspect the journal | `cat ~/.cache/chezmoi-brew-inbox/journal.ndjson` |
+| Empty the journal (lose pending entries) | `: > ~/.cache/chezmoi-brew-inbox/journal.ndjson` |
 
 ## age operations
 
@@ -70,7 +79,7 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 
 | Goal | Command |
 |---|---|
-| Sync local clone with main (auto-prunes `[gone]` branches) | `git sync` |
+| Fast-forward the current branch to its upstream; prune `[gone]` and merged branches | `git sync` |
 | New branch off main | `git switch -c <name>` |
 | Open PR | `gh pr create --fill` |
 | Watch a PR's checks | `gh pr checks --watch` |
@@ -82,25 +91,15 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 
 | Goal | Target |
 |---|---|
-| Everything pre-commit catches | `make ci` |
+| Lint, format check, template matrix, bats, audit | `make ci` |
+| Every commit hook, including the ones `make ci` skips | `pre-commit run --all-files` |
 | Just the linters | `make lint` |
 | Just shfmt format check | `make fmt-check` |
 | Render the 4-cell template matrix | `make verify-templates` |
 | Quick single-render check (for pre-commit) | `make verify-templates-quick` |
 | Run the bats unit tests | `make test-bats` |
 | Security/secret audit | `make audit` |
-
-## Keyboard shortcuts (macOS, while in the prompt)
-
-| Action | Keys |
-|---|---|
-| Spotlight | ++cmd+space++ |
-| Open terminal | ++cmd+space++ then type `iterm` |
-| System Settings | ++cmd+comma++ in System Settings |
-| Force quit | ++cmd+option+esc++ |
-| Switch app | ++cmd+tab++ |
-| New finder window | ++cmd+n++ |
-| Lock screen | ++ctrl+cmd+q++ |
+| Full drift check / remediation menu (machine only) | `make drift` / `make fix` |
 
 ## Pre-commit hooks (this repo)
 
@@ -108,13 +107,15 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 |---|---|
 | `check-merge-conflict` | Unresolved `<<<<<<< HEAD` markers |
 | `check-yaml` / `check-toml` | Syntax errors |
+| `check-added-large-files` | Accidentally committed large files |
 | `end-of-file-fixer` | Missing trailing newline |
-| `trailing-whitespace` | Stray spaces at line ends |
+| `trailing-whitespace` / `mixed-line-ending` | Stray spaces at line ends; CRLF line endings |
 | `shfmt` | Shell formatting |
 | `yamllint` | YAML style violations |
 | `gitleaks` | Common secret patterns (AWS, GitHub, etc.) |
 | `markdownlint-cli2` | Markdown style |
 | `shellcheck-via-make` | Shell linting (template-aware) |
+| `check-bash4-isms` | Bash 4 constructs in scripts that must run under macOS's bash 3.2 |
 | `chezmoi-execute-template` | Template renders for at least one cell |
 | `codespell` | Common typos |
 | `mkdocs-config-validate` | mkdocs.yml syntax + plugin names |
@@ -122,3 +123,4 @@ One-page command reference. Print-friendly (the print stylesheet hides nav and c
 | `check-docs-nav` | Orphan docs pages |
 | `check-requirements-sorted` | docs/requirements.txt alphabetised |
 | `check-root-mirrors` | Root-file mirror includes intact |
+| `check-codex-mirrors` | A Codex command port that has drifted from its `.claude/commands` source |
