@@ -135,6 +135,13 @@ repos:
             pass_filenames: false
             files: '^(CHANGELOG\.md|CONTRIBUTING\.md|SECURITY\.md|CODE_OF_CONDUCT\.md|docs/(changelog|contributing|security|code-of-conduct)\.md)$'
 
+          - id: check-codex-mirrors
+            name: Codex ports match their Claude Code commands
+            entry: scripts/check-codex-mirrors.sh
+            language: system
+            pass_filenames: false
+            files: '^(\.claude/commands/[^/]+\.md|\.agents/skills/source-command-[^/]+/.*|scripts/check-codex-mirrors\.sh)$'
+
           # Secret scanning is not a pre-commit-stage hook: ggshield billed the
           # shared GitGuardian quota on every commit/amend/rejected attempt.
           # It moved to the global pre-push git hook (~/.config/git/hooks/pre-push,
