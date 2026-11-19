@@ -95,7 +95,7 @@ Secrets live in the repo as `*.age` blobs encrypted to a single recipient. A per
 
 ### First-class Claude Code integration
 
-Project-scoped Claude Code config ships in the repo: a tuned `.claude/settings.json`, chezmoi-aware subagents (`chezmoi-template-validator`, `dotfile-drift-reporter`), slash commands (`/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`), and a path-scoped rule file per file pattern. `CLAUDE.md` is the agent brief; `AGENTS.md` is the short brief for non-Claude agents.
+Project-scoped Claude Code config ships in the repo: a tuned `.claude/settings.json`, chezmoi-aware subagents (`chezmoi-template-validator`, `dotfile-drift-reporter`), slash commands (`/update`, `/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`), and a path-scoped rule file per file pattern. `CLAUDE.md` is the agent brief; `AGENTS.md` is the short brief for non-Claude agents.
 
 [`CLAUDE.md`](CLAUDE.md) · [`AGENTS.md`](AGENTS.md) · [`.claude/`](.claude/)
 
