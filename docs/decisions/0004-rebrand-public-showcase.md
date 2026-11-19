@@ -11,6 +11,12 @@
 > **Update (2026-11):** the rejected alternative "Auto-generate the CHANGELOG" below was
 > reversed by [ADR-0005](0005-release-please-owns-releases.md) for releases after `2.1.0`.
 > The rest of this decision stands.
+>
+> **Update (2026-11-19):** the README was restructured for new visitors. The `vhs` demo
+> (*Why `vhs`* below) was dropped: its tape scripted output the real `mac` never prints, so the
+> README now shows a text block captured from the script itself. The README comparison table
+> from *Decision* item 2 was removed (`docs/comparison.md` remains), and the feature highlights
+> became a bullet list. The rest of this decision stands.
 
 ## Context
 

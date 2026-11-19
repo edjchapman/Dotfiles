@@ -5,103 +5,67 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/edjchapman/dotfiles/ci.yml?style=flat-square&label=CI)](https://github.com/edjchapman/dotfiles/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/edjchapman/dotfiles?style=flat-square)](https://github.com/edjchapman/dotfiles/releases)
 [![License](https://img.shields.io/github/license/edjchapman/dotfiles?style=flat-square)](LICENSE)
-[![Last commit](https://img.shields.io/github/last-commit/edjchapman/dotfiles?style=flat-square)](https://github.com/edjchapman/dotfiles/commits/main)
-[![Stars](https://img.shields.io/github/stars/edjchapman/dotfiles?style=flat-square)](https://github.com/edjchapman/dotfiles/stargazers)
 [![Managed with chezmoi](https://img.shields.io/badge/managed%20with-chezmoi-blue?style=flat-square)](https://www.chezmoi.io/)
 
 </div>
 
-A reproducible, privacy-hardened macOS configuration. One command bootstraps a clean Mac into a fully configured environment: shell, packages, git, encrypted secrets, macOS preferences, Dock, firewall, and Claude Code config. Drift between `$HOME` and the source is detected from the shell banner; remediation is a single `mac` command.
-
-## Bootstrap a clean Mac
-
-```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply edjchapman
-```
-
-Drop your age private key in `~/.config/chezmoi/key.txt` first — see [`docs/runbooks/new-machine.md`](docs/runbooks/new-machine.md) for the full procedure (~30 minutes wall-clock, mostly waiting on Homebrew).
+A reproducible, privacy-hardened macOS configuration managed with [chezmoi](https://www.chezmoi.io/): one command takes a clean Mac to a fully configured one, covering shell, packages, git, encrypted secrets, macOS preferences, Dock, firewall and Claude Code config. It began as install scripts and symlinks and grew into something closer to a small piece of ops infrastructure: one source tree templated for a personal and a work machine, age-encrypted secrets, idempotent scripts, drift detection, and CI that renders every template before a change merges.
 
 ## Demo
 
-```text
-$ mac
-─── drift summary ──────────────────────────────────────────
-  ✓ $HOME files          in sync
-  ✓ Brewfile             in sync
-  ✓ macOS defaults       in sync
-  ✓ security baseline    in sync (FileVault, SIP, firewall, keys, perms)
-  ✓ external pins        in sync (oh-my-zsh)
+When the machine has drifted from the source, `mac` says what differs and offers only the fixes that apply:
 
-No drift detected.
+```text
+$ mac --menu
+
+==> chezmoi-fix
+   drift: home: 2, brew-extra: 5
+
+What would you like to do?
+  1) Review diff & apply 2 home-file changes      →  chezmoi diff, confirm, chezmoi apply
+  2) Back up locally-edited files into the repo   →  chezmoi re-add, guided per file
+  3) Resolve 5 brew-extra packages                →  adopt into Brewfile / uninstall, per package
+  4) Run chezmoi doctor (health diagnostic)       →  chezmoi doctor
+  5) Silence drift banner for this shell session  →  export CHEZMOI_DRIFT_QUIET=1
+  q) Quit
+
 ```
 
-When something is out of sync, `mac` summarises what changed and offers a one-keystroke remediation menu — review-and-apply with a single confirm, a guided per-file backup of locally-edited files, and per-package adopt/uninstall for brew packages installed outside the Brewfile. The same check runs at every shell startup as a one-line banner naming each signal (`chezmoi: home 2 · brew-extra 5 — run 'mac'`), and again at 09:30 daily as a clickable macOS notification.
+`--menu` prints the menu and exits. Plain `mac` re-runs the drift check first, then waits for a choice. Every new shell shows the same state as a one-line banner: `chezmoi: home 2 · brew-extra 5 — run 'mac'`.
 
-A rendered terminal recording lives at `assets/demo/bootstrap.gif` (source: [`assets/demo/bootstrap.tape`](assets/demo/bootstrap.tape) — render with `brew install vhs && vhs assets/demo/bootstrap.tape`).
+## Get started
 
-## Why this exists
+### Fork it for your Mac
 
-Most Mac dotfiles repos are shell scripts that install packages and symlink config files. This one started as that, then accreted a layer of safety nets over ~2 years: templating to support both a personal and a work machine from one source tree, age-encrypted secrets so credentials can live in the repo, idempotent scripts so re-running is safe, drift detection so manual edits to `$HOME` don't silently rot the source state, and a CI matrix that validates the templates across `personal/work × arm64/amd64` before any change merges.
+The secrets here are encrypted to the maintainer's age key, so the bootstrap one-liner fails at the decrypt step for anyone else. Fork the repo, then:
 
-The result is closer to a small piece of ops infrastructure than to a personal config dump. It is also why a clean Mac to fully configured takes ~30 minutes of wall-clock time — most of it Homebrew waiting on downloads — and one decision: the machine type.
+1. Clone your fork to `~/.local/share/chezmoi`.
+2. Generate your own age key and put its public key in `.chezmoi.toml.tmpl`.
+3. Remove what is the maintainer's: the two `*.age` files, the git identity, the Claude Code config script, and the Brewfile entries you don't want.
+4. Run `chezmoi init`, read every line of `chezmoi diff`, then `chezmoi apply`.
 
-Read [ADR-0001](docs/decisions/0001-chezmoi-as-source-of-truth.md) for why chezmoi is the foundation, [ADR-0002](docs/decisions/0002-age-encryption.md) for why age, and [ADR-0004](docs/decisions/0004-rebrand-public-showcase.md) for why this README looks the way it does.
+Each step is spelled out in [`docs/runbooks/fork.md`](docs/runbooks/fork.md).
+
+### Restore my own machine
+
+For the maintainer, and for you once your fork is set up (with your own GitHub username).
+
+1. Place the age private key at `~/.config/chezmoi/key.txt`. Nothing decrypts without it.
+2. Run the bootstrap:
+
+   ```bash
+   sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply edjchapman
+   ```
+
+It takes about 30 minutes, mostly Homebrew downloads. [`docs/runbooks/new-machine.md`](docs/runbooks/new-machine.md) covers the rest: the App Store sign-in, the prompts to expect, and the logins to do afterwards.
 
 ## Highlights
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### Matrix-tested templates
-
-Every `.tmpl` is rendered against four `(machine_type, arch)` combinations on every commit. Templates that break on Intel-but-not-Apple-Silicon (or work-but-not-personal) fail CI, not next month's reinstall.
-
-[`docs/decisions/0003-machine-type-templating.md`](docs/decisions/0003-machine-type-templating.md)
-
-</td>
-<td width="50%" valign="top">
-
-### Drift detection + `mac`
-
-A shell-startup banner runs the drift check on every new terminal; a LaunchAgent fires the same check at 09:30 daily as a clickable notification. `mac` is the one alias to call when anything is flagged — it walks each source of drift in both directions: apply the repo's version, or back a local edit up into the repo (`re-add`, with templates and encrypted secrets routed safely). Unmanaged brew packages get a per-package adopt-or-uninstall prompt that feeds the Brewfile merge machinery.
-
-[`docs/runbooks/recover-from-drift.md`](docs/runbooks/recover-from-drift.md)
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### Age-encrypted secrets, draft-PR-only updates
-
-Secrets live in the repo as `*.age` blobs encrypted to a single recipient. A per-commit `gitleaks` hook, a per-push `ggshield` scan, and a monthly full-history audit catch accidental leaks. Self-update workflows for external pins open **draft** PRs only — nothing auto-merges, nothing auto-applies.
-
-[`docs/runbooks/secret-rotation.md`](docs/runbooks/secret-rotation.md)
-
-</td>
-<td width="50%" valign="top">
-
-### Weekly self-update PRs for pinned externals
-
-`oh-my-zsh` is pinned by SHA. A weekly workflow checks for upstream commits, bumps the pin, and opens a draft PR you review like any other change. (`claude-code-config` is not an external — it's an actively-developed working clone at `~/Development/claude-code-config`, updated through its own git workflow.)
-
-[`.chezmoiexternal.toml`](.chezmoiexternal.toml)
-
-</td>
-</tr>
-<tr>
-<td colspan="2" valign="top">
-
-### First-class Claude Code integration
-
-Project-scoped Claude Code config ships in the repo: a tuned `.claude/settings.json`, chezmoi-aware subagents (`chezmoi-template-validator`, `dotfile-drift-reporter`), slash commands (`/update`, `/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`), and a path-scoped rule file per file pattern. `CLAUDE.md` is the agent brief; `AGENTS.md` is the short brief for non-Claude agents.
-
-[`CLAUDE.md`](CLAUDE.md) · [`AGENTS.md`](AGENTS.md) · [`.claude/`](.claude/)
-
-</td>
-</tr>
-</table>
+- **Matrix-tested templates.** Every `.tmpl` is rendered for all four `personal/work × arm64/amd64` combinations on each PR and push to `main`, so a template that breaks on one of them fails CI, not next month's reinstall. [ADR-0003](docs/decisions/0003-machine-type-templating.md)
+- **Drift detection and `mac`.** A banner in every new shell and a 09:30 notification (sent only when there is drift) report where the machine differs from the source. `mac` fixes it in either direction: apply the repo's version, or back a local edit up into the repo. [Recover from drift](docs/runbooks/recover-from-drift.md)
+- **Age-encrypted secrets.** Credentials live in the repo as `*.age` blobs encrypted to one recipient. A per-commit `gitleaks` hook, a per-push `ggshield` scan and a monthly full-history audit catch leaks. [Secret rotation](docs/runbooks/secret-rotation.md)
+- **Updates you review.** Weekly workflows open PRs for the pinned `oh-my-zsh` SHA, pre-commit hook versions and App Store app availability. Nothing merges or applies by itself. [Where the system enforces correctness](docs/architecture.md#where-the-system-enforces-correctness)
+- **Claude Code integration.** The repo ships project-scoped settings, chezmoi-aware subagents, slash commands (`/update`, `/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`) and a rule file per file pattern. [`CLAUDE.md`](CLAUDE.md)
 
 ## How it works
 
@@ -113,55 +77,41 @@ Project-scoped Claude Code config ships in the repo: a tuned `.claude/settings.j
 
 The source is a single git repo. `chezmoi apply` reads templates, evaluates them against the machine's `machine_type` and `arch`, decrypts the `*.age` blobs with the local age key, and writes the result into `$HOME`. Idempotent `run_once_*` and `run_onchange_*` scripts handle bootstrap, post-install, and re-runnable mutations. Anywhere the system drifts from the source, `mac` reports it.
 
-## Compared to other dotfiles repositories
-
-| Repo | Stars | Templating | Encrypted secrets | Self-healing | Agent-ready |
-|---|---|---|---|---|---|
-| **edjchapman/dotfiles** | — | ✓ chezmoi, matrix-tested | ✓ age | ✓ `mac` | ✓ CLAUDE.md |
-| [mathiasbynens/dotfiles](https://github.com/mathiasbynens/dotfiles) | 32k+ | ✗ | ✗ | ✗ | ✗ |
-| [holman/dotfiles](https://github.com/holman/dotfiles) | 9k+ | ✗ | ✗ | ✗ | ✗ |
-| [thoughtbot/dotfiles](https://github.com/thoughtbot/dotfiles) | 9k+ | ✗ | ✗ | ✗ | ✗ |
-| [paulirish/dotfiles](https://github.com/paulirish/dotfiles) | 7k+ | ✗ | ✗ | ✗ | ✗ |
-| [nicknisi/dotfiles](https://github.com/nicknisi/dotfiles) | 4k+ | ✗ | ✗ | ✗ | ✗ |
-
-Longer per-repo notes are in [`docs/comparison.md`](docs/comparison.md). Suggestions and corrections welcome via [discussions](https://github.com/edjchapman/dotfiles/discussions).
-
 ## Day-to-day commands
 
 <details>
-<summary><strong>When you'd use which alias</strong></summary>
+<summary><strong>When you'd use which command</strong></summary>
 
 | When | Command |
 |---|---|
-| Shell says "run `mac`" | `mac` |
+| The shell banner says "run 'mac'" | `mac` |
 | Change a config | `chezmoi cd` → edit → `chezmoi diff` → `chezmoi apply` |
 | Pull updates from another machine | `chezmoi update` |
-| Inspect today's brew upgrade output | `brewlog` |
+| Follow today's brew upgrade output | `brewlog` |
+| Report reclaimable disk space (deletes nothing) | `disk-cleanup`, then `disk-cleanup --apply` to reclaim it |
+| Snapshot router, internet and HTTPS latency | `net-check` |
+| Fast-forward the current branch and prune merged branches | `git sync` |
 
-`mac` is the one entry point for anything the system has flagged. It refreshes the drift check, summarises what's pending across home files, brew packages, macOS defaults, and security baseline, then walks you through fixing it — in whichever direction is right per item:
-
-- **Review diff & apply** — pages the full diff, one confirm, source wins.
-- **Back up locally-edited files** — per-file diff then apply / re-add / skip; targets backed by a template are routed to the source `.tmpl` (re-add would flatten them) and secrets go through `chezmoi add --encrypt`. Ends with the branch-and-PR steps to publish.
-- **Resolve brew extras** — each package installed outside the Brewfile gets adopt / uninstall / skip; adopting queues a journal event and hands off to the interactive Brewfile merge.
-
-If nothing is wrong it says so and exits.
+The full list is in the [cheatsheet](docs/cheatsheet.md).
 
 </details>
 
 <details>
 <summary><strong>What runs automatically</strong></summary>
 
+On the machine:
+
 | What | When | Where to look |
 |---|---|---|
-| **Homebrew upgrades** (`brew upgrade && brew doctor && brew cleanup`) | Once per day, on first shell of the day | `brewlog` (or `tail ~/.cache/brewup.log`) |
-| Drift detection | Every new shell + 09:30 daily notification | Shell banner; `mac` to act |
-| Brew install tracking | Every interactive `brew install/uninstall/...` | Shell banner shows pending count; `mac` merges into `Brewfile.tmpl` |
-| Disk cleanup report (dry run, nothing deleted) | 1 Jan / Apr / Jul / Oct, 10:00 notification | `disk-cleanup` to review; `disk-cleanup --apply` to reclaim |
-| Weekly draft PR for stale external pins | Mondays | GitHub Actions: `update-externals` |
-| Monthly full-history secret scan | First of the month | GitHub Actions: `audit` |
-| Draft release PR (version bump + changelog); merging it publishes the release | Every push to `main` with a `feat` or `fix` | GitHub Actions: `release-please` |
+| Homebrew upgrade, then `brew doctor` and `brew cleanup` (both run even if the upgrade fails) | Once a day, in the first shell of the day | `brewlog` |
+| Drift banner | Every new shell; re-measured when the last check is over 4 hours old | `mac` to act |
+| Drift notification | 09:30 daily, only when there is drift | `mac` to act |
+| Brew install tracking | Every `brew` or `mas` install, uninstall, tap or untap | The banner shows the pending count; `mac` merges it into `Brewfile.tmpl` |
+| Drift cache refresh | After those `brew` and `mas` commands, and after `chezmoi apply` | The next shell's banner |
+| Brew-inbox reminder | Mondays 09:30, only when events are pending | `mac` to merge |
+| Disk cleanup report (dry run, nothing deleted) | 1 Jan / Apr / Jul / Oct at 10:00; notifies only at 1 GB or more reclaimable | `disk-cleanup` |
 
-Nothing auto-merges. Nothing auto-applies to `$HOME`. Updates land as draft PRs for you to review.
+Nothing auto-merges and nothing auto-applies to `$HOME`. The CI, release and scheduled update workflows are listed in [Where the system enforces correctness](docs/architecture.md#where-the-system-enforces-correctness).
 
 </details>
 
@@ -169,8 +119,8 @@ Nothing auto-merges. Nothing auto-applies to `$HOME`. Updates land as draft PRs 
 
 | | |
 |---|---|
-| [**Live docs site**](https://dotfiles.edchapman.co.uk/) | the full documentation, rendered — runbooks, ADRs, FAQ, glossary |
-| [`docs/runbooks/`](docs/runbooks) | bootstrap, secret rotation, drift recovery, brew sync, branch protection |
+| [**Live docs site**](https://dotfiles.edchapman.co.uk/) | the full documentation, rendered: runbooks, ADRs, FAQ, glossary |
+| [`docs/runbooks/`](docs/runbooks) | new machine, fork, secret rotation, drift recovery, brew sync, branch protection, network slowdowns, NordVPN, Cloudflare deploys, custom domain |
 | [`docs/decisions/`](docs/decisions) | architecture decision records (chezmoi, age, machine-type templating, rebrand, release automation) |
 | [`docs/faq.md`](docs/faq.md) | common questions about scope, forking, drift, alternatives |
 | [`docs/comparison.md`](docs/comparison.md) | how this compares to other popular dotfiles repos |
@@ -180,14 +130,6 @@ Nothing auto-merges. Nothing auto-applies to `$HOME`. Updates land as draft PRs 
 | [`SECURITY.md`](SECURITY.md) | private vulnerability reporting |
 | [`CHANGELOG.md`](CHANGELOG.md) | release-by-release changes (generated by release-please after 2.1.0) |
 
-## Roadmap
+## Contributing and licence
 
-Open ideas and active threads live in [issues](https://github.com/edjchapman/dotfiles/issues) and [discussions](https://github.com/edjchapman/dotfiles/discussions). The README is intentionally not a roadmap doc — the issue tracker is.
-
-## Contributing
-
-PRs, discussions, and forks-with-improvements are all welcome. The repo is opinionated and scoped to one person's Mac, so not every idea fits, but well-framed problems are useful regardless. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## License
-
-MIT. See [`LICENSE`](LICENSE).
+PRs, [issues](https://github.com/edjchapman/dotfiles/issues) and [discussions](https://github.com/edjchapman/dotfiles/discussions) are welcome. The repo is scoped to one person's Mac, so not every idea fits; see [`CONTRIBUTING.md`](CONTRIBUTING.md). MIT licensed: see [`LICENSE`](LICENSE).
