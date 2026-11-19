@@ -9,8 +9,10 @@ tags:
 
 The repo is one person's machine config, not a template. Its secrets are encrypted to the maintainer's age key, so the bootstrap one-liner fails at the decrypt step for anyone else. Fork it, change the five things below, then apply.
 
-!!! warning "How far this is tested"
-    The five changes below were identified by reading the source, not by running a fork end to end. Treat the first `chezmoi diff` as the real test, and read every line of it before you apply.
+!!! info "How far this is tested"
+    Tested on 19 Nov 2026 against a scratch copy of the repo with a throwaway age key. Unchanged, `chezmoi diff` stops at "no identity matched any of the recipients". With steps 2–5 applied it renders all 43 targets with no decryption error, and none of the maintainer's name, email or key appear in the output.
+
+    Not exercised: the `chezmoi init` prompts, the Homebrew install, the macOS defaults, or the script that asks for your password. Read your own first `chezmoi diff` before you apply.
 
 ## What is specific to the maintainer
 
@@ -87,6 +89,7 @@ These scripts also encode personal choices. Read them before the first apply and
 | `run_onchange_04-dock-layout.sh.tmpl` | Which apps are in the Dock |
 | `run_onchange_05-login-items.sh` | Which apps open at login |
 | `dot_config/chezmoi/scripts/executable_macos-sudo.sh` | Firewall, Touch ID for `sudo`, energy and auto-update settings; asks for your password |
+| `dot_config/iterm2/private_com.googlecode.iterm2.plist` | The maintainer's iTerm2 preferences, including a profile working directory of `/Users/ed`. Delete it or replace it with your own export |
 
 ### 7. Initialise, preview, apply
 
