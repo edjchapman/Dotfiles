@@ -1,6 +1,6 @@
 # Runbook: recover from drift
 
-`chezmoi verify` exits non-zero, the shell banner shows "N things need attention", or the daily macOS notification fires. This is "drift" — `$HOME` no longer matches the source state.
+`chezmoi verify` exits non-zero, the shell banner names a signal (`chezmoi: home 2 — run 'mac'`), or the daily macOS notification fires. This is "drift" — the machine no longer matches the source state.
 
 ## TL;DR — run `mac`
 
@@ -42,16 +42,16 @@ Older render patterns sometimes leave files in `$HOME` that chezmoi no longer tr
 
 Remediations `mac` performs itself refresh the cache on exit, so the next shell's banner already reflects them. After fixing a finding by hand — as with everything above — run `chezmoi-drift-check --full` (or just `mac` again) so the banner catches up.
 
-## How drift surfaces (signal sources)
+## How drift surfaces (drift triggers)
 
-Three concurrent signals all feed a single cache, consumed by one entry point:
+Drift triggers re-measure the drift signals and write a single cache, consumed by one entry point:
 
 ```mermaid
 flowchart LR
-    subgraph SIGNALS["Three concurrent signals"]
-        BANNER["Shell banner<br/>(every new terminal)"]
+    subgraph SIGNALS["Drift triggers"]
+        BANNER["New shell<br/>(cache older than 4h)"]
         AGENT["LaunchAgent<br/>(09:30 daily)"]
-        WRAPPER["brew/mas wrapper<br/>(every install/uninstall)"]
+        WRAPPER["brew / mas / chezmoi apply<br/>(after each command)"]
     end
     CACHE["~/.cache/chezmoi-drift/state"]
     MAC["mac<br/>(= chezmoi-fix)"]
@@ -84,11 +84,11 @@ flowchart LR
     class HD,BM,BE,DD,SD fix
 ```
 
-Three machine-resident signals run automatically; you don't need to remember to check:
+Three triggers run automatically, so you don't need to remember to check; the fourth is `mac` itself, which refreshes the cache before it shows the menu:
 
-- **Shell banner.** A new zsh prints a one-line yellow banner (e.g. `chezmoi: 3 thing(s) need attention — run 'mac'`) when `~/.cache/chezmoi-drift/state` shows non-zero counts. `export CHEZMOI_DRIFT_QUIET=1` silences the banner only — the cache still refreshes in the background and the daily launchd notification still fires.
+- **New shell.** A new zsh prints a one-line yellow banner naming each firing signal (e.g. `chezmoi: home 2 · brew-extra 5 · inbox 3 — run 'mac'`, with `(as of 2h ago)` appended when the cache is old) when `~/.cache/chezmoi-drift/state` shows non-zero counts, and refreshes the cache in the background if it is older than 4 hours. `export CHEZMOI_DRIFT_QUIET=1` skips both the banner and that refresh — the launchd job and the command wrappers still keep the cache current.
 - **Daily macOS notification.** The launchd agent `com.user.chezmoi-drift` (loaded from `~/Library/LaunchAgents/com.user.chezmoi-drift.plist`) runs at 09:30 and posts a Notification Center alert if drift is found. Logs at `~/Library/Logs/chezmoi-drift.log`. To swap the fire-and-forget notification for a clickable AppleScript dialog with a "Fix now" button that launches iTerm + `chezmoi-fix`, change `--notify` to `--alert` in the plist's `ProgramArguments` and reload (`launchctl unload` + `launchctl load`).
-- **`brew` / `mas` wrapper.** After `brew install/uninstall/reinstall/tap/untap` (or `mas install/uninstall/purchase`), the wrapper appends an event to `~/.cache/chezmoi-brew-inbox/journal.ndjson` and refreshes the drift cache asynchronously. The shell banner on the next session shows the pending count; `mac` walks the merge interactively.
+- **Command wrappers.** After `brew install/uninstall/reinstall/tap/untap` (or `mas install/uninstall/purchase`), the wrapper appends an event to `~/.cache/chezmoi-brew-inbox/journal.ndjson` and refreshes the drift cache asynchronously. The shell banner on the next session shows the pending count; `mac` walks the merge interactively. A third wrapper refreshes the cache after every `chezmoi apply`, so the banner reflects the post-apply state.
 
 The single source of truth is `~/.local/bin/chezmoi-drift-check` — `make drift` is a shortcut for `chezmoi-drift-check --full`.
 
@@ -185,7 +185,7 @@ Note that `update-externals.yml` only PRs the `oh-my-zsh` SHA — the only chezm
 
 ## When a self-update workflow runs but no PR appears
 
-The weekly workflows (`update-externals.yml`, `update-vscode.yml`, `update-mas.yml`) only open a draft PR when they actually find something to update. A successful run with no PR can mean either:
+The weekly workflows (`update-externals.yml`, `update-precommit.yml`, `update-mas.yml`) only open a draft PR when they actually find something to update. A successful run with no PR can mean either:
 
 - **Nothing to update** — the common case; the green check is genuine.
 - **Silent degradation** — the upstream API was unreachable or rate-limited, the workflow checked nothing, and still exited successfully.
@@ -197,7 +197,7 @@ gh run list --workflow=update-externals.yml --limit=5
 gh run view <run-id> --log | grep -iE 'unauthorized|timeout|rate-limited|fail|error'
 ```
 
-If the log shows API errors, re-run via `gh workflow run update-externals.yml` (or the Actions UI). If the log is clean and you still expected updates, sanity-check the upstream directly (the GitHub commits API for `oh-my-zsh`, the VS Code Marketplace, the iTunes App Store API) — the workflow's "nothing to do" may just be accurate.
+If the log shows API errors, re-run via `gh workflow run update-externals.yml` (or the Actions UI). If the log is clean and you still expected updates, sanity-check the upstream directly (the GitHub commits API for `oh-my-zsh`, the iTunes App Store API) — the workflow's "nothing to do" may just be accurate.
 
 ## Last resort
 

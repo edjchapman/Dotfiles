@@ -37,8 +37,8 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! warning "Templates only render at apply time"
     `chezmoi status` does NOT re-render. If you edit a template, you must `chezmoi diff` (which renders) to see the actual change.
 
-!!! warning "A broken template can brick your shell"
-    If `dot_zshrc.tmpl` renders to invalid shell syntax, your next `chezmoi apply` writes a broken `~/.zshrc`, and your next terminal session may fail to start. Always:
+!!! warning "A broken template breaks whatever it renders"
+    If `dot_gitconfig.tmpl` renders to invalid config, your next `chezmoi apply` breaks every `git` command; a `run_onchange_*.sh.tmpl` that renders to invalid shell fails the apply partway through. (`dot_zshrc` is not a template, but a syntax error in it stops new terminals starting just the same.) Always:
 
     1. `make verify-templates` first
     2. `chezmoi diff` and read every line
@@ -52,11 +52,11 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 
 ## Drift detection traps
 
-!!! warning "The drift cache can be ahead of reality"
-    The shell banner reads `~/.cache/chezmoi-drift/state` (cheap, instant). If you fix drift via direct `chezmoi apply`, the cache doesn't auto-update — the banner may still show pending. Run `mac` (which rewrites the cache) to clear.
+!!! warning "The banner shows a cache, not the machine"
+    The shell banner reads `~/.cache/chezmoi-drift/state`. `chezmoi apply`, `brew`, `mas` and `mac` refresh it; a fix made any other way (System Settings, `chmod`, a script) leaves it stale for up to 4 hours. See [Troubleshooting](troubleshooting.md#shell-banner-shows-drift-but-mac-says-nothings-pending).
 
 !!! info "Brew journal is async"
-    The `brew` wrapper records `install/uninstall` events to `~/.cache/brewup.log` *but* doesn't immediately update `Brewfile.tmpl`. You must run `chezmoi-brew-sync` (interactive) to merge the journal into source.
+    The `brew` wrapper records `install/uninstall` events to `~/.cache/chezmoi-brew-inbox/journal.ndjson` *but* doesn't update `Brewfile.tmpl`. Run `chezmoi-brew-sync` (interactive) to merge the journal into source. `~/.cache/brewup.log` is a different file: the daily upgrade's output.
 
 !!! tip "Use `mac` instead of remembering which helper to run"
     There are ~6 helpers (`chezmoi-drift-check`, `chezmoi-brew-sync`, `chezmoi-defaults-audit`, `chezmoi-security-audit`, `chezmoi-brew-record`, `chezmoi-fix`). You don't need to remember which one to run — `mac` figures it out for you.
@@ -77,8 +77,8 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! warning "`sudo` is only allowed in `run_once_after_05-macos-sudo.sh`"
     Every other script must avoid `sudo`. The chezmoi state DB doesn't track sudo prompts well, and putting `sudo` in `run_onchange_*` means it re-prompts on every apply.
 
-!!! info "LaunchAgent doesn't fire when screen is locked"
-    The daily 09:30 drift notification can be deferred up to 12 hours if the Mac is asleep or screen-locked. If the schedule matters, prefer cron via `launchd` `StartCalendarInterval` (already configured).
+!!! info "A quiet 09:30 usually means no drift"
+    The daily drift notification is posted only when there is something to report. If the Mac is asleep at 09:30, `launchd` runs the job on wake; if it is powered off or logged out, that day's run is skipped.
 
 !!! info "App Store apps need `mas` to install via Brewfile"
     `mas` is in the Brewfile and lets `mas` lines work. But you must be signed in to the App Store first. The new-machine runbook covers this.
@@ -95,29 +95,17 @@ Things that have bitten the maintainer and would bite a new contributor — coll
 !!! danger "Two GnuPG installations share one `~/.gnupg`, and the agent is first-come-first-served"
     GPG Suite installs MacGPG2 2.2 under `/usr/local/MacGPG2`, and Homebrew's `gnupg` 2.5 lands alongside it at `/opt/homebrew/bin/gpg` — **not** because it was ever requested (`installed_on_request: false`), but as a transitive dependency of `gpgme`, `gpgmepp`, and `poppler`. It can't simply be uninstalled, and `brew shellenv` puts it ahead of MacGPG2 on `PATH`.
 
-    Only one `gpg-agent` can own the `~/.gnupg/S.gpg-agent` socket. Whichever starts first wins and then serves **both** frontends — so the terminal and the Finder "Services → Decrypt Selection" menu silently share one daemon whose identity depends on what you ran first that session.
+    Only one `gpg-agent` can own the `~/.gnupg/S.gpg-agent` socket. Whichever starts first serves **both** the terminal and the Finder "Services → Decrypt Selection" menu, so behaviour depends on what you ran first that session.
 
-    **Why it bit** (#150): Homebrew's gnupg ships only `pinentry-curses`, and `gpg-agent.conf` had no `pinentry-program` line, so the agent chose a pinentry off its own `PATH`. When the Homebrew agent won the socket, GUI decryption got a *terminal* passphrase prompt with no terminal to draw in. GPG Services surfaced only `Decryption failed code = 152` — `GPG_ERR_DECRYPT_FAILED`, libgpg-error's catch-all, which named neither the agent nor the pinentry. The keyring, the secret key, and the message were all fine.
-
-    **The fix**: `private_dot_gnupg/private_gpg-agent.conf` pins `pinentry-program` to GPG Suite's `pinentry-mac`. Both agents read the same config file, so the outcome no longer depends on which one won. `pinentry-mac` also reaches the macOS Keychain for a saved passphrase, which `pinentry-curses` can never do.
-
-    **Diagnosing the next one**: stderr says only "decryption failed". Use `--status-fd` for the machine-readable stream, which names the pinentry that launched and the key considered:
-
-    ```bash
-    gpg --batch --status-fd 2 --decrypt msg.asc 2>&1 >/dev/null | grep -E 'PINENTRY_LAUNCHED|NO_SECKEY'
-    ```
-
-    A healthy GUI-capable agent reports `PINENTRY_LAUNCHED … mac`; `… curses` is the broken state. Confirm which agent holds the socket with `lsof -p "$(pgrep -x gpg-agent)" | awk '$4=="txt"'` — the version handshake (`gpg-connect-agent 'GETINFO version' /bye`) tells you the same thing faster.
-
-    **Related**: `dot_gitconfig.tmpl` pins `gpg.program` to the MacGPG2 path by `stat`, not `lookPath`, for the same underlying reason — a render-time `PATH` lookup baked in whichever gpg happened to be first and produced phantom drift.
+    **The rule**: pin anything agent-dependent explicitly instead of trusting `PATH`. `private_dot_gnupg/private_gpg-agent.conf` pins `pinentry-program`, and `dot_gitconfig.tmpl` pins `gpg.program` to the MacGPG2 path by `stat`, not `lookPath`. The symptom this caused (#150) and its diagnosis are in [Troubleshooting](troubleshooting.md#gpg-services-decrypt-selection-fails-with-decryption-failed-code-152).
 
 ## CLI / workflow traps
 
 !!! warning "`gh pr merge --rebase` is disabled at the repo level"
     The repo only allows squash merges. The `--rebase` and `--merge` flags will fail at the API call.
 
-!!! tip "`git sync` auto-prunes `[gone]` branches"
-    Since 2026-06-15, the alias detects branches squash-merged and deleted upstream, and prunes them locally. Don't manually `git branch -D` — let `git sync` do it.
+!!! tip "`git sync` updates the current branch, not `main`"
+    The alias fast-forwards whatever branch you are on to its own upstream, then prunes branches that were squash-merged and deleted upstream (`[gone]`) or merged into the default branch. Don't manually `git branch -D` — let `git sync` do it. It merges the ref its own fetch wrote instead of running `git pull`, so an IDE fetching in the background can't break it.
 
 !!! warning "Don't `--no-verify` past the pre-commit hooks"
     `git commit --no-verify` bypasses every secret-scan and lint hook. If a hook is genuinely wrong, fix it. The hooks exist to stop secret leaks — the cost of bypassing is much higher than the cost of fixing the hook.
@@ -126,6 +114,8 @@ Things that have bitten the maintainer and would bite a new contributor — coll
     `.claude/hooks/guard-destructive.sh` receives a JSON payload on stdin and decides whether to refuse a Bash call. It used to pull the command out with `sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'`, and that **failed open**: `[^"]*` stops at the first *escaped* quote inside the JSON string, so `echo "hi" && chezmoi apply` arrived as the harmless `echo \` and passed every rule. The `.*` prefix was greedy too, so a payload mentioning `command` twice matched the wrong one. It now parses with `python3 -c 'json.load(...)'`, and if the parser is missing or the payload won't parse it scans the **raw payload** — over-blocking rather than under-blocking.
 
     The mirror-image defect: a raw substring match also fires on a guarded phrase that is merely *quoted as data*, so a commit message discussing `chezmoi apply` was refused. Heredoc bodies are now stripped before matching — but only when nothing in the command could execute them. `bash <<EOF`, `… | sh`, `python3 -c`, `xargs` and friends keep their bodies scanned, because there the body **is** code.
+
+    When the guard does block a command, its message tells the agent to stop and ask rather than reach the same outcome by another route (`gh api`, `git clean`, a script file).
 
     Both directions are pinned by `tests/guard-destructive.bats`, which builds payloads with a real JSON encoder. The previous suite interpolated into a format string and therefore *could not express* a command containing a quote — which is precisely why the fail-open survived 14 passing tests. If you touch this hook, run those tests against the old version first and watch them go red.
 

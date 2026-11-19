@@ -9,10 +9,14 @@ Operational procedures for the day-to-day and infrequent-but-important tasks. Ea
 
 ## Infrequent
 
-- [New machine bootstrap](new-machine.md) — taking a clean macOS install to fully configured. End-to-end procedure.
+- [Fork this repo](fork.md) — the five things to change before this works on someone else's Mac.
+- [New machine bootstrap](new-machine.md) — taking a clean macOS install to fully configured, with the maintainer's age key. End-to-end procedure.
 - [Secret rotation](secret-rotation.md) — rotating a single secret (AWS key, GitHub PAT) or the age key itself. Includes "Back up the age key" strategies.
 - [NordVPN settings](nordvpn.md) — what chezmoi sets, what stays manual, and the checklist after installing or reinstalling the app.
+- [Network slowdowns](network-slowdowns.md) — finding the slow hop with `net-check`, and the record of the Wi-Fi investigation on this Mac.
 - [Branch protection](branch-protection.md) — the 12 required CI checks on `main`, how to recreate the protection rules if they're disabled, and how to add new required checks.
+- [Cloudflare deploys](cloudflare-deploys.md) — how the docs site and PR previews are built and published.
+- [Custom domain](custom-domain.md) — the DNS, redirect and TLS setup behind `dotfiles.edchapman.co.uk`.
 
 ## When to write a new runbook
 

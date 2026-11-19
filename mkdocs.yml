@@ -242,14 +242,15 @@ markdown_extensions:
 nav:
     - Home: index.md
     - Architecture: architecture.md
-    - Quick start: runbooks/new-machine.md
     - Runbooks:
           - runbooks/index.md
+          - Fork this repo: runbooks/fork.md
           - New machine bootstrap: runbooks/new-machine.md
           - Secret rotation: runbooks/secret-rotation.md
           - Recover from drift: runbooks/recover-from-drift.md
           - Brew sync: runbooks/brew-sync.md
           - NordVPN settings: runbooks/nordvpn.md
+          - Network slowdowns: runbooks/network-slowdowns.md
           - Branch protection: runbooks/branch-protection.md
           - Cloudflare deploys: runbooks/cloudflare-deploys.md
           - Custom domain: runbooks/custom-domain.md

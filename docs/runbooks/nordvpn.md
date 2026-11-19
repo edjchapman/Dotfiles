@@ -17,7 +17,7 @@ These key names are undocumented and were read from the app's preferences at ver
 ## Manual checklist
 
 1. **Sign in.** Do this in the app. Don't store account details in this repo.
-2. **Leave `Shield` off.** Go to System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions, switch off **NordVPN protection**, then restart. [Troubleshooting](../troubleshooting.md) explains why.
+2. **Leave `Shield` off.** Go to System Settings ➜ General ➜ Login Items & Extensions ➜ Endpoint Security Extensions, switch off **NordVPN protection**, then restart. [Network slowdowns](network-slowdowns.md) explains why.
 3. **Check Threat Protection is off.** Switching off `Shield` stops the app's Protect features, so the app should show them as off.
 4. **Set the kill switch and protocol.** Choose these in the app. Their values aren't recorded here because they aren't in the preferences plist.
 5. **Restart the app, then verify.** Use the commands below.

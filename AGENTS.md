@@ -9,7 +9,7 @@ This repo follows the [`agents.md`](https://agents.md/) convention. The full age
 - Lint/test entry point: `make ci`.
 - Validate template changes: `make verify-templates` (runs the personal/work × arm64/amd64 matrix).
 - Add a secret: `chezmoi add --encrypt <path>`. Plaintext is never acceptable.
-- All commits go through pre-commit hooks (shellcheck, shfmt, yamllint, markdownlint, gitleaks); pushes also run a ggshield secret scan via the global pre-push hook.
+- All commits go through pre-commit hooks (shellcheck, shfmt, yamllint, markdownlint, gitleaks, codespell, one template render, and the repo's own guards); pushes also run a ggshield secret scan via the global pre-push hook.
 - All pushes go via PR. Self-update workflows open **draft** PRs only.
 
 ## Project-scoped Claude Code config
@@ -17,7 +17,8 @@ This repo follows the [`agents.md`](https://agents.md/) convention. The full age
 - `.claude/settings.json` — committed permissions and hooks for this repo.
 - `.claude/agents/` — chezmoi-specific subagents (template validator, drift reporter).
 - `.claude/commands/` — chezmoi-specific slash commands (`/update`, `/preview`, `/verify-templates`, `/add-secret`, `/sync-externals`).
-- `.agents/skills/source-command-*/` — Codex ports of those commands. Edit a command and its port together; `scripts/check-codex-mirrors.sh` (pre-commit) fails when they drift.
+- `.agents/skills/source-command-*/` — Codex ports of those commands. Edit a command and its port together; `scripts/check-codex-mirrors.sh` (pre-commit and CI) fails when they drift.
+- `.codex/` — Codex agents and `hooks.json`. Its hooks are symlinks to `.claude/hooks/`, so there is one copy of each.
 
 Global Claude Code config (general-purpose agents, skills, settings) is symlinked from a separate repo by `run_onchange_after_07-claude-global-symlinks.sh`. Don't duplicate global config here.
 
